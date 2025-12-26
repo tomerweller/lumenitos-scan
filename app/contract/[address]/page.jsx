@@ -159,7 +159,7 @@ export default function ContractPage({ params }) {
   }
 
   return (
-    <div className="scan-page">
+    <div className="scan-page page-contract">
       <ScanHeader />
 
       <hr />

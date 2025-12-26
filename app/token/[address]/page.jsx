@@ -86,7 +86,7 @@ export default function TokenPage({ params }) {
   }
 
   return (
-    <div className="scan-page">
+    <div className="scan-page page-token">
       <ScanHeader />
       <hr />
 

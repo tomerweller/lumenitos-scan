@@ -5,6 +5,37 @@
   padding: 40px 20px;
 }
 
+/* Page type header tints - subtle gradient at top, full viewport width */
+.scan-page.page-tx::before,
+.scan-page.page-account::before,
+.scan-page.page-token::before,
+.scan-page.page-contract::before,
+.scan-page.page-lp::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 150px;
+  pointer-events: none;
+  z-index: -1;
+}
+.scan-page.page-tx::before {
+  background: linear-gradient(to bottom, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+}
+.scan-page.page-account::before {
+  background: linear-gradient(to bottom, rgba(34, 197, 94, 0.1) 0%, transparent 100%);
+}
+.scan-page.page-token::before {
+  background: linear-gradient(to bottom, rgba(168, 85, 247, 0.1) 0%, transparent 100%);
+}
+.scan-page.page-contract::before {
+  background: linear-gradient(to bottom, rgba(249, 115, 22, 0.1) 0%, transparent 100%);
+}
+.scan-page.page-lp::before {
+  background: linear-gradient(to bottom, rgba(6, 182, 212, 0.1) 0%, transparent 100%);
+}
+
 .scan-page h1 {
   font-size: 2.5em;
   font-weight: 600;

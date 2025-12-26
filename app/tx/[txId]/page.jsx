@@ -335,7 +335,7 @@ export default function TransactionPage({ params }) {
   };
 
   return (
-    <div className="scan-page">
+    <div className="scan-page page-tx">
       <ScanHeader />
 
       <hr />

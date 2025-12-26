@@ -224,7 +224,7 @@ export default function AccountPage({ params }) {
   }
 
   return (
-    <div className="scan-page">
+    <div className="scan-page page-account">
       <ScanHeader />
       <hr />
 

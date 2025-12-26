@@ -118,7 +118,7 @@ export default function LiquidityPoolPage({ params }) {
   }
 
   return (
-    <div className="scan-page">
+    <div className="scan-page page-lp">
       <ScanHeader />
       <hr />
 
