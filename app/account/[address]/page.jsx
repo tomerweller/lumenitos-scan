@@ -144,7 +144,8 @@ export default function AccountPage({ params }) {
       return {
         ...item,
         formattedAmount: formatTokenBalance(displayAmount, decimals),
-        symbol: info?.symbol || '???',
+        // Use sacSymbol from event topic if available (SAC transfers), otherwise fall back to tokenInfo
+        symbol: item.sacSymbol || info?.symbol || '???',
       };
     }
   };

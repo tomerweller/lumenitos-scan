@@ -185,6 +185,19 @@ function parseTransferEvent(event, targetAddress) {
     }
   }
 
+  // SAC transfers have a 4th topic with the asset in "ticker:issuer" format
+  let sacSymbol = null;
+  if (topics.length >= 4 && topics[3]) {
+    try {
+      const assetStr = StellarSdk.scValToNative(topics[3]);
+      if (typeof assetStr === 'string' && assetStr.includes(':')) {
+        sacSymbol = assetStr.split(':')[0];
+      }
+    } catch {
+      // Not a string topic, ignore
+    }
+  }
+
   const direction = from === targetAddress ? 'sent' : 'received';
 
   return {
@@ -196,7 +209,8 @@ function parseTransferEvent(event, targetAddress) {
     to,
     amount,
     direction,
-    counterparty: direction === 'sent' ? to : from
+    counterparty: direction === 'sent' ? to : from,
+    sacSymbol,
   };
 }
 
@@ -524,6 +538,19 @@ function parseTransferEventGeneric(event) {
     }
   }
 
+  // SAC transfers have a 4th topic with the asset in "ticker:issuer" format
+  let sacSymbol = null;
+  if (topics.length >= 4 && topics[3]) {
+    try {
+      const assetStr = StellarSdk.scValToNative(topics[3]);
+      if (typeof assetStr === 'string' && assetStr.includes(':')) {
+        sacSymbol = assetStr.split(':')[0];
+      }
+    } catch {
+      // Not a string topic, ignore
+    }
+  }
+
   return {
     txHash: event.txHash,
     ledger: event.ledger,
@@ -531,7 +558,8 @@ function parseTransferEventGeneric(event) {
     contractId: event.contractId,
     from,
     to,
-    amount
+    amount,
+    sacSymbol,
   };
 }
 

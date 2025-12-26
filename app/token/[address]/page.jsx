@@ -101,7 +101,9 @@ export default function TokenPage({ params }) {
       {loading ? (
         <p>loading...</p>
       ) : error ? (
-        <p className="error">error: {error}</p>
+        <p className="error">
+          {error.includes('not found') ? 'token contract not found' : `error: ${error}`}
+        </p>
       ) : (
         <>
           <h2>token info</h2>

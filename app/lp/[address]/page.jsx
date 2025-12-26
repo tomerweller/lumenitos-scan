@@ -95,7 +95,8 @@ export default function LiquidityPoolPage({ params }) {
     return {
       ...t,
       formattedAmount: formatTokenBalance(displayAmount, decimals),
-      symbol: info?.symbol || '???',
+      // Use sacSymbol from event topic if available (SAC transfers), otherwise fall back to tokenInfo
+      symbol: t.sacSymbol || info?.symbol || '???',
     };
   };
 
