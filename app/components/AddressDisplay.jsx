@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { shortenAddress, getStellarExpertUrl, copyToClipboard } from '@/utils/scan/helpers';
+import { useNetwork } from './NetworkContext';
 
 /**
  * Display an address with copy button and stellar.expert link
@@ -13,6 +14,7 @@ import { shortenAddress, getStellarExpertUrl, copyToClipboard } from '@/utils/sc
  */
 export default function AddressDisplay({ address, label, type }) {
   const [copied, setCopied] = useState(false);
+  const { network } = useNetwork();
 
   if (!address) return null;
 
@@ -21,12 +23,12 @@ export default function AddressDisplay({ address, label, type }) {
     copyToClipboard(address, setCopied);
   };
 
-  // Determine stellar.expert URL
+  // Determine stellar.expert URL using current network from context
   let explorerUrl;
   if (type === 'tx') {
-    explorerUrl = getStellarExpertUrl('').replace(/\/$/, '') + `/tx/${address}`;
+    explorerUrl = getStellarExpertUrl('', network).replace(/\/$/, '') + `/tx/${address}`;
   } else {
-    explorerUrl = getStellarExpertUrl(address);
+    explorerUrl = getStellarExpertUrl(address, network);
   }
 
   return (

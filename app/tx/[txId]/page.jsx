@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { getTransaction, initXdrDecoder, decodeXdr, getTokenMetadata, getPoolShareMetadata } from '@/utils/scan';
 import { formatOperations } from '@/utils/scan/operations';
 import { rawToDisplay, formatTokenBalance } from '@/utils/stellar/helpers';
-import { getAddressPath } from '@/utils/scan/helpers';
+import { getAddressPath, getStellarExpertUrl } from '@/utils/scan/helpers';
 import { ScanHeader, useNetwork } from '@/app/components';
-import config from '@/utils/config';
+import { getNetworkConfig } from '@/utils/config';
 
 // SEP-41 token event types
 const SEP41_EVENT_TYPES = ['transfer', 'mint', 'burn', 'clawback', 'approve', 'set_admin'];
@@ -277,13 +277,12 @@ export default function TransactionPage({ params }) {
     return <span>{String(data)}</span>;
   };
 
+  // Get explorer URL for transaction
+  const txExplorerUrl = `${getNetworkConfig(network).explorerUrl}/tx/${txId}`;
+
   return (
     <div className="scan-page">
-      <h1>LUMENITOS SCAN</h1>
-      <p className={`network-label ${config.isTestnet ? 'testnet' : 'mainnet'}`}>
-        {config.isTestnet ? config.stellar.network : 'MAINNET'}
-      </p>
-      <p className="subtitle">mini token explorer</p>
+      <ScanHeader />
 
       <hr />
 
@@ -293,7 +292,7 @@ export default function TransactionPage({ params }) {
           {copied ? 'copied!' : 'copy'}
         </a>)
         {' | '}
-        <a href={`${config.stellar.explorerUrl}/tx/${txId}`} target="_blank" rel="noopener noreferrer">
+        <a href={txExplorerUrl} target="_blank" rel="noopener noreferrer">
           stellar.expert
         </a>
       </p>

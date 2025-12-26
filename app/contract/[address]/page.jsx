@@ -11,6 +11,7 @@ import {
   extractContractIds,
 } from '@/utils/scan';
 import { rawToDisplay, formatTokenBalance } from '@/utils/stellar/helpers';
+import { getStellarExpertUrl } from '@/utils/scan/helpers';
 import { useNetwork, ScanHeader, AddressDisplay } from '@/app/components';
 import '@/app/scan.css';
 
@@ -172,11 +173,7 @@ export default function ContractPage({ params }) {
   if (!isValid) {
     return (
       <div className="scan-page">
-        <h1>LUMENITOS SCAN</h1>
-        <p className={`network-label ${config.isTestnet ? 'testnet' : 'mainnet'}`}>
-          {config.isTestnet ? config.stellar.network : 'MAINNET'}
-        </p>
-        <p className="subtitle">mini token explorer</p>
+        <ScanHeader />
 
         <hr />
 
@@ -195,11 +192,7 @@ export default function ContractPage({ params }) {
 
   return (
     <div className="scan-page">
-      <h1>LUMENITOS SCAN</h1>
-      <p className={`network-label ${config.isTestnet ? 'testnet' : 'mainnet'}`}>
-        {config.isTestnet ? config.stellar.network : 'MAINNET'}
-      </p>
-      <p className="subtitle">mini token explorer</p>
+      <ScanHeader />
 
       <hr />
 
@@ -210,7 +203,7 @@ export default function ContractPage({ params }) {
           {copied ? 'copied!' : 'copy'}
         </a>)
         {' | '}
-        <a href={`${config.stellar.explorerUrl}/contract/${address}`} target="_blank" rel="noopener noreferrer">
+        <a href={getStellarExpertUrl(address, network)} target="_blank" rel="noopener noreferrer">
           stellar.expert
         </a>
       </p>

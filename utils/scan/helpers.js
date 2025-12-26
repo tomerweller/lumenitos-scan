@@ -5,7 +5,7 @@
  * formatting and display of addresses, timestamps, and amounts.
  */
 
-import config from '@/utils/config';
+import config, { getNetworkConfig } from '@/utils/config';
 import { StrKey } from '@stellar/stellar-sdk';
 
 /**
@@ -71,24 +71,30 @@ export const getAddressPath = (addr) => {
 /**
  * Get the stellar.expert URL for an address
  * @param {string} addr - The address
+ * @param {string} [network] - Optional network override ('testnet' or 'mainnet')
  * @returns {string} The stellar.expert URL
  */
-export const getStellarExpertUrl = (addr) => {
-  if (!addr) return config.stellar.explorerUrl;
+export const getStellarExpertUrl = (addr, network) => {
+  // Use passed network or fall back to config
+  const explorerUrl = network
+    ? getNetworkConfig(network).explorerUrl
+    : config.stellar.explorerUrl;
+
+  if (!addr) return explorerUrl;
 
   if (addr.startsWith('L')) {
     // Liquidity pool - stellar.expert uses hex pool ID, not L... address
     try {
       const poolId = StrKey.decodeLiquidityPool(addr);
-      return `${config.stellar.explorerUrl}/liquidity-pool/${poolId.toString('hex')}`;
+      return `${explorerUrl}/liquidity-pool/${poolId.toString('hex')}`;
     } catch {
-      return `${config.stellar.explorerUrl}/liquidity-pool/${addr}`;
+      return `${explorerUrl}/liquidity-pool/${addr}`;
     }
   }
   if (addr.startsWith('C')) {
-    return `${config.stellar.explorerUrl}/contract/${addr}`;
+    return `${explorerUrl}/contract/${addr}`;
   }
-  return `${config.stellar.explorerUrl}/account/${addr}`;
+  return `${explorerUrl}/account/${addr}`;
 };
 
 /**
