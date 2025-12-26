@@ -228,7 +228,7 @@ export default function AccountPage({ params }) {
       <ScanHeader />
       <hr />
 
-      <AddressDisplay address={address} />
+      <AddressDisplay address={address} label="account:" />
 
       {address.startsWith('C') && (
         <p>

@@ -122,7 +122,7 @@ export default function LiquidityPoolPage({ params }) {
       <ScanHeader />
       <hr />
 
-      <AddressDisplay address={address} />
+      <AddressDisplay address={address} label="lp:" />
 
       <hr />
 

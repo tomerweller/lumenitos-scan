@@ -90,7 +90,7 @@ export default function TokenPage({ params }) {
       <ScanHeader />
       <hr />
 
-      <AddressDisplay address={address} />
+      <AddressDisplay address={address} label="token:" />
 
       <p>
         <Link href={`/contract/${address}`}>switch to contract view</Link>
