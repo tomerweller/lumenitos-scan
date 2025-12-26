@@ -306,6 +306,85 @@ export function extractContractIds(transfers) {
 }
 
 /**
+ * Get fee events for an address (CAP-67)
+ * Fee events track XLM charged/refunded for transaction fees
+ * Format: topics: ["fee", from:Address], data: amount:i128
+ * Positive amount = fee charged, negative amount = fee refunded
+ * @param {string} address - Address to fetch fee events for
+ * @param {number} limit - Maximum events to return (default 1000)
+ * @returns {Promise<Array>} Array of parsed fee events
+ */
+export async function getFeeEvents(address, limit = 1000) {
+  try {
+    const feeSymbol = StellarSdk.nativeToScVal('fee', { type: 'symbol' });
+    const targetScVal = StellarSdk.nativeToScVal(StellarSdk.Address.fromString(address), {
+      type: 'address',
+    });
+
+    // Get the native XLM contract ID
+    const xlmContractId = StellarSdk.Asset.native().contractId(config.networkPassphrase);
+
+    const startLedger = await getLatestLedger();
+
+    // Query for fee events (refunds are indicated by negative amounts)
+    const result = await rpcCall('getEvents', {
+      startLedger: startLedger,
+      filters: [
+        {
+          type: 'contract',
+          contractIds: [xlmContractId],
+          topics: [[feeSymbol.toXDR('base64'), targetScVal.toXDR('base64')]],
+        }
+      ],
+      pagination: {
+        limit: limit,
+        order: 'desc'
+      }
+    });
+
+    const events = result.events || [];
+    return events.map(event => parseFeeEvent(event, address));
+  } catch (error) {
+    console.error('Error fetching fee events:', error);
+    throw error;
+  }
+}
+
+/**
+ * Parse a fee event into structured format (CAP-67)
+ * Positive amount = fee charged, negative amount = fee refunded
+ * @param {object} event - The event from getEvents
+ * @param {string} address - The address paying/receiving fees
+ * @returns {object} Parsed fee event info
+ */
+function parseFeeEvent(event, address) {
+  let amount = 0n;
+
+  if (event.value) {
+    try {
+      const valueScVal = StellarSdk.xdr.ScVal.fromXDR(event.value, 'base64');
+      amount = scValToAmount(valueScVal);
+    } catch {
+      amount = 0n;
+    }
+  }
+
+  // Negative amount = refund (per CAP-67 spec)
+  const isRefund = amount < 0n;
+
+  return {
+    txHash: event.txHash,
+    ledger: event.ledger,
+    timestamp: event.ledgerClosedAt,
+    contractId: event.contractId,
+    from: address,
+    amount: isRefund ? -amount : amount, // Store absolute value
+    isRefund,
+    type: 'fee',
+  };
+}
+
+/**
  * Get recent token activity across all contracts (network-wide)
  * Fetches SEP-41 transfer events without filtering by contract or address
  * @param {number} limit - Maximum transfers to return (default 50)

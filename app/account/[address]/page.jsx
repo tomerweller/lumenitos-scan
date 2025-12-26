@@ -7,12 +7,14 @@ import {
   getTokenBalance,
   getTokenMetadata,
   getRecentTransfers,
+  getFeeEvents,
   extractContractIds,
   getTrackedAssets,
   addTrackedAsset,
   removeTrackedAsset,
 } from '@/utils/scan';
 import { rawToDisplay, formatTokenBalance } from '@/utils/stellar/helpers';
+import { formatTimestamp } from '@/utils/scan/helpers';
 import {
   ScanHeader,
   AddressDisplay,
@@ -27,6 +29,7 @@ export default function AccountPage({ params }) {
   const { network, isLoading: networkLoading } = useNetwork();
   const [balances, setBalances] = useState([]);
   const [transfers, setTransfers] = useState([]);
+  const [feeEvents, setFeeEvents] = useState([]);
   const [tokenInfo, setTokenInfo] = useState({}); // { contractId: { symbol, decimals } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,6 +37,7 @@ export default function AccountPage({ params }) {
   const [newAssetAddress, setNewAssetAddress] = useState('');
   const [addingAsset, setAddingAsset] = useState(false);
   const [addAssetError, setAddAssetError] = useState('');
+  const [visibleFeeCount, setVisibleFeeCount] = useState(10);
 
   const isValid = isValidAddress(address);
 
@@ -46,11 +50,16 @@ export default function AccountPage({ params }) {
   const loadData = async () => {
     setLoading(true);
     setError(null);
+    setVisibleFeeCount(10);
 
     try {
-      // Step 1: Fetch all transfers (up to 1000)
-      const transferList = await getRecentTransfers(address);
+      // Step 1: Fetch transfers and fee events in parallel
+      const [transferList, feeList] = await Promise.all([
+        getRecentTransfers(address),
+        getFeeEvents(address).catch(() => []), // Fee events may fail on older networks
+      ]);
       setTransfers(transferList);
+      setFeeEvents(feeList);
 
       // Step 2: Extract unique contract IDs from transfers + manually tracked assets
       const autoContractIds = extractContractIds(transferList);
@@ -130,6 +139,15 @@ export default function AccountPage({ params }) {
       ...t,
       amount: formatTokenBalance(displayAmount, decimals),
       symbol: info?.symbol || '???',
+    };
+  };
+
+  // Format fee event for display - XLM with 7 decimals
+  const formatFeeEvent = (f) => {
+    const displayAmount = rawToDisplay(f.amount, 7);
+    return {
+      ...f,
+      formattedAmount: formatTokenBalance(displayAmount, 7),
     };
   };
 
@@ -281,6 +299,45 @@ export default function AccountPage({ params }) {
             formatTransfer={formatTransfer}
             onRefresh={loadData}
           />
+
+          {feeEvents.length > 0 && (
+            <>
+              <hr />
+
+              <h2>fees</h2>
+
+              <div className="transfer-list">
+                {feeEvents.slice(0, visibleFeeCount).map((f, index) => {
+                  const formatted = formatFeeEvent(f);
+                  return (
+                    <p key={`${f.txHash}-${index}`} className="transfer-item">
+                      <span className={formatted.isRefund ? 'success' : ''}>
+                        {formatted.isRefund ? '+' : '-'}{formatted.formattedAmount} XLM
+                      </span>
+                      {' '}
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        ({formatted.isRefund ? 'refund' : 'fee'})
+                      </span>
+                      <br />
+                      <small>
+                        {formatTimestamp(formatted.timestamp)}
+                        {' '}
+                        (<Link href={`/tx/${formatted.txHash}`}>{formatted.txHash?.substring(0, 4)}</Link>)
+                      </small>
+                    </p>
+                  );
+                })}
+              </div>
+
+              {visibleFeeCount < feeEvents.length && (
+                <p>
+                  <a href="#" onClick={(e) => { e.preventDefault(); setVisibleFeeCount(v => v + 10); }}>
+                    show more
+                  </a>
+                </p>
+              )}
+            </>
+          )}
         </>
       )}
 
