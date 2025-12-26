@@ -25,7 +25,7 @@ export default function AddressLink({ address, display, short = true }) {
 
   // B... addresses are claimable balance IDs, not linkable accounts
   if (address.startsWith('B')) {
-    return <span className="text-secondary">{displayText} (balance)</span>;
+    return <span className="text-secondary">{displayText}</span>;
   }
 
   // All other address types use internal Next.js Link routing
