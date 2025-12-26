@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import NetworkSelector from './NetworkSelector';
 
 /**
@@ -9,7 +10,7 @@ import NetworkSelector from './NetworkSelector';
 export default function ScanHeader() {
   return (
     <>
-      <h1>LUMENITOS SCAN</h1>
+      <h1><Link href="/">LUMENITOS SCAN</Link></h1>
       <NetworkSelector />
       <p className="subtitle">mini token explorer</p>
     </>
