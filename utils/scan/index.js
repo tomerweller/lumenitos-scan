@@ -865,6 +865,11 @@ export async function getPoolShareMetadata(contractId) {
     // Try to fetch LP data - if it succeeds, this is a pool share token
     const poolData = await getLiquidityPoolData(poolAddress);
 
+    // If pool not found, return null
+    if (!poolData) {
+      return null;
+    }
+
     // Format symbol as TICKER1:TICKER2
     const symbol = `${poolData.assetA.code}:${poolData.assetB.code}`;
 
@@ -907,7 +912,7 @@ export async function getLiquidityPoolData(poolAddress) {
     const result = await rpcCall('getLedgerEntries', { keys: [keyBase64] });
 
     if (!result.entries || result.entries.length === 0) {
-      throw new Error('Liquidity pool not found');
+      return null;
     }
 
     // Parse the ledger entry XDR

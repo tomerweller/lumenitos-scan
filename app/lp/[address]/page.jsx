@@ -48,6 +48,12 @@ export default function LiquidityPoolPage({ params }) {
         getRecentTransfers(address),
       ]);
 
+      if (!pool) {
+        setError('Liquidity pool not found');
+        setLoading(false);
+        return;
+      }
+
       setPoolData(pool);
       setTransfers(poolTransfers);
 
