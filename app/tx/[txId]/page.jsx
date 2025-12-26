@@ -537,7 +537,16 @@ export default function TransactionPage({ params }) {
                 // - set_admin: [symbol, new_admin_addr]
                 const getAddress = (topicIndex) => event.topics?.[topicIndex]?.address;
                 const minify = (addr) => addr ? addr.substring(0, 5) : null;
-                const addrLink = (addr) => getAddressPath(addr);
+
+                // Helper to render address with appropriate linking
+                // B... addresses are claimable balance IDs, not linkable
+                const renderAddr = (addr) => {
+                  if (!addr) return '?';
+                  if (addr.startsWith('B')) {
+                    return <span className="text-secondary">{minify(addr)}</span>;
+                  }
+                  return <Link href={getAddressPath(addr)}>{minify(addr)}</Link>;
+                };
 
                 // Determine from/to addresses based on event type
                 let fromAddr = null;
@@ -590,51 +599,51 @@ export default function TransactionPage({ params }) {
                             ({isRefund ? 'refund' : 'fee'})
                           </span>
                           {' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : ''}
+                          {fromAddr ? renderAddr(fromAddr) : ''}
                         </p>
                       );
                     case 'transfer':
                       return (
                         <p className="event-description">
                           {symbolLink}: transfer {formattedAmount || '?'} from{' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : '?'}{' '}
-                          to {toAddr ? <Link href={addrLink(toAddr)}>{minify(toAddr)}</Link> : '?'}
+                          {renderAddr(fromAddr)}{' '}
+                          to {renderAddr(toAddr)}
                         </p>
                       );
                     case 'mint':
                       return (
                         <p className="event-description">
                           {symbolLink}: mint {formattedAmount || '?'} to{' '}
-                          {toAddr ? <Link href={addrLink(toAddr)}>{minify(toAddr)}</Link> : '?'}
+                          {renderAddr(toAddr)}
                         </p>
                       );
                     case 'burn':
                       return (
                         <p className="event-description">
                           {symbolLink}: burn {formattedAmount || '?'} from{' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : '?'}
+                          {renderAddr(fromAddr)}
                         </p>
                       );
                     case 'clawback':
                       return (
                         <p className="event-description">
                           {symbolLink}: clawback {formattedAmount || '?'} from{' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : '?'}
+                          {renderAddr(fromAddr)}
                         </p>
                       );
                     case 'approve':
                       return (
                         <p className="event-description">
                           {symbolLink}: approve {formattedAmount || '?'} from{' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : '?'}{' '}
-                          to {toAddr ? <Link href={addrLink(toAddr)}>{minify(toAddr)}</Link> : '?'}
+                          {renderAddr(fromAddr)}{' '}
+                          to {renderAddr(toAddr)}
                         </p>
                       );
                     case 'set_admin':
                       return (
                         <p className="event-description">
                           {symbolLink}: set_admin{' '}
-                          {fromAddr ? <Link href={addrLink(fromAddr)}>{minify(fromAddr)}</Link> : '?'}
+                          {renderAddr(fromAddr)}
                         </p>
                       );
                     default:
