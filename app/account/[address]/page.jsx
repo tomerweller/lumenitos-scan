@@ -289,73 +289,90 @@ export default function AccountPage({ params }) {
 
           <hr />
 
-          <h2>activity</h2>
+          <h2>token activity</h2>
 
           {activity.length === 0 ? (
-            <p>no activity found</p>
-          ) : (
-            <>
-              <div className="transfer-list">
-                {activity.slice(0, visibleCount).map((item, index) => {
-                  const formatted = formatActivity(item);
-                  return (
-                    <p key={`${item.txHash}-${index}`} className="transfer-item">
-                      {item.type === 'fee' ? (
-                        // Fee event display
-                        <>
-                          <span className={formatted.isRefund ? 'success' : ''}>
-                            {formatted.isRefund ? '+' : '-'}{formatted.formattedAmount} XLM
-                          </span>
-                          {' '}
-                          <span style={{ color: 'var(--text-secondary)' }}>
-                            ({formatted.isRefund ? 'refund' : 'fee'})
-                          </span>
-                        </>
-                      ) : (
-                        // Transfer event display
-                        <>
-                          {item.direction === 'sent' ? 'sent ' : 'received '}
-                          {formatted.formattedAmount}{' '}
-                          <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
-                          {' '}
-                          {item.direction === 'sent' ? 'to ' : 'from '}
-                          <Link href={`/account/${item.counterparty}`}>
-                            {item.counterparty?.substring(0, 4)}..{item.counterparty?.slice(-4)}
-                          </Link>
-                        </>
-                      )}
-                      <br />
+            <p>no token activity found</p>
+          ) : (() => {
+            // Group events by transaction hash
+            const txGroups = [];
+            const txMap = new Map();
+            for (const item of activity) {
+              if (!txMap.has(item.txHash)) {
+                const group = { txHash: item.txHash, timestamp: item.timestamp, events: [] };
+                txMap.set(item.txHash, group);
+                txGroups.push(group);
+              }
+              txMap.get(item.txHash).events.push(item);
+            }
+
+            return (
+              <>
+                <div className="transfer-list">
+                  {txGroups.slice(0, visibleCount).map((group) => (
+                    <div key={group.txHash} className="tx-group">
+                      {group.events.map((item, eventIndex) => {
+                        const formatted = formatActivity(item);
+                        return (
+                          <p key={eventIndex} className="transfer-item">
+                            {item.type === 'fee' ? (
+                              // Fee event display
+                              <>
+                                <span className={formatted.isRefund ? 'success' : ''}>
+                                  {formatted.isRefund ? '+' : '-'}{formatted.formattedAmount} XLM
+                                </span>
+                                {' '}
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                  ({formatted.isRefund ? 'refund' : 'fee'})
+                                </span>
+                              </>
+                            ) : (
+                              // Transfer event display
+                              <>
+                                {item.direction === 'sent' ? 'sent ' : 'received '}
+                                {formatted.formattedAmount}{' '}
+                                <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                                {' '}
+                                {item.direction === 'sent' ? 'to ' : 'from '}
+                                <Link href={`/account/${item.counterparty}`}>
+                                  {item.counterparty?.substring(0, 4)}..{item.counterparty?.slice(-4)}
+                                </Link>
+                              </>
+                            )}
+                          </p>
+                        );
+                      })}
                       <small>
-                        {formatTimestamp(formatted.timestamp)}
+                        {formatTimestamp(group.timestamp)}
                         {' '}
-                        (<Link href={`/tx/${formatted.txHash}`}>{formatted.txHash?.substring(0, 4)}</Link>)
+                        (<Link href={`/tx/${group.txHash}`}>{group.txHash?.substring(0, 4)}</Link>)
                       </small>
-                    </p>
-                  );
-                })}
-              </div>
+                    </div>
+                  ))}
+                </div>
 
-              {visibleCount < activity.length && (
-                <p>
-                  <a href="#" onClick={(e) => { e.preventDefault(); setVisibleCount(v => v + 10); }}>
-                    show more
-                  </a>
-                  {' | '}
-                  <a href="#" onClick={(e) => { e.preventDefault(); loadData(); }}>
-                    refresh
-                  </a>
-                </p>
-              )}
+                {visibleCount < txGroups.length && (
+                  <p>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setVisibleCount(v => v + 10); }}>
+                      show more
+                    </a>
+                    {' | '}
+                    <a href="#" onClick={(e) => { e.preventDefault(); loadData(); }}>
+                      refresh
+                    </a>
+                  </p>
+                )}
 
-              {visibleCount >= activity.length && (
-                <p>
-                  <a href="#" onClick={(e) => { e.preventDefault(); loadData(); }}>
-                    refresh
-                  </a>
-                </p>
-              )}
-            </>
-          )}
+                {visibleCount >= txGroups.length && (
+                  <p>
+                    <a href="#" onClick={(e) => { e.preventDefault(); loadData(); }}>
+                      refresh
+                    </a>
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </>
       )}
 

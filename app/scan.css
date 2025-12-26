@@ -169,6 +169,30 @@
   font-size: 0.85em;
 }
 
+/* Transaction group (clustered events) */
+.scan-page .tx-group {
+  margin: 0.75em 0;
+  padding-bottom: 0.75em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.scan-page .tx-group:last-child {
+  border-bottom: none;
+}
+
+.scan-page .tx-group .transfer-item {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.scan-page .tx-group > small {
+  display: block;
+  margin-top: 0.25em;
+  color: var(--text-secondary);
+  font-size: 0.85em;
+}
+
 /* Modal styles */
 .modal-overlay {
   position: fixed;
