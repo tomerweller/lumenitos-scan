@@ -50,6 +50,7 @@
 
 .scan-page h1 a:hover {
   background: none;
+  color: inherit;
   opacity: 0.8;
 }
 
