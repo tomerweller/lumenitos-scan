@@ -38,11 +38,21 @@ lumenitos-scan/
 ├── utils/
 │   ├── config.js                 # Network configs + dynamic switching
 │   ├── scan/
-│   │   ├── index.js              # RPC calls, event parsing, caching
+│   │   ├── index.js              # High-level API facade + re-exports
+│   │   ├── parsers.js            # Pure event parsing functions
+│   │   ├── rpc.js                # RPC client with injectable config
+│   │   ├── storage.js            # localStorage abstractions
+│   │   ├── validation.js         # Pure validation functions
 │   │   ├── helpers.js            # Address formatting, timestamps
 │   │   └── operations.js         # XDR operation formatting
 │   └── stellar/
 │       └── helpers.js            # ScVal parsing, balance formatting
+├── __tests__/                    # Jest test files
+│   ├── parsers.test.mjs          # Event parsing tests
+│   ├── rpc-queries.test.mjs      # RPC query structure tests
+│   ├── helpers.test.mjs          # Display helper tests
+│   ├── scan.test.mjs             # Validation tests
+│   └── stellar-helpers.test.mjs  # Balance conversion tests
 └── public/                       # Static assets
 ```
 
@@ -54,7 +64,17 @@ lumenitos-scan/
 - Persists selection to localStorage
 - Triggers data refetch on network change
 
-**Scan Utilities** (`utils/scan/index.js`)
+**Scan Utilities** (`utils/scan/`)
+
+The scan module is organized for testability with pure functions and injectable dependencies:
+
+- `parsers.js` - Pure event parsing functions (no side effects, easy to unit test)
+- `validation.js` - Pure validation functions for addresses and inputs
+- `rpc.js` - RPC client factory with injectable config + topic filter builders
+- `storage.js` - localStorage abstraction with injectable storage backend
+- `index.js` - High-level API facade that wires everything together
+
+Key capabilities:
 - Direct JSON-RPC calls to Soroban RPC via `getEvents` API
 - CAP-67 event parsing for transfer, mint, burn, clawback, and fee events
 - Event validation to filter non-conforming events (e.g., non-standard topic formats)
@@ -114,6 +134,43 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
+## Testing
+
+The project uses Jest with ES Modules support:
+
+```bash
+npm test           # Run all tests
+npm run test:watch # Run tests in watch mode
+```
+
+### Test Structure
+
+| File | Coverage |
+|------|----------|
+| `parsers.test.mjs` | Event parsing (transfer, mint, burn, fee events) |
+| `rpc-queries.test.mjs` | RPC query structure + regression tests |
+| `helpers.test.mjs` | Display formatting (timestamps, amounts) |
+| `scan.test.mjs` | Address validation, contract ID extraction |
+| `stellar-helpers.test.mjs` | Balance conversion utilities |
+
+### Testing Patterns
+
+The codebase is designed for testability:
+
+- **Pure functions** - `parsers.js` and `validation.js` have no side effects
+- **Dependency injection** - `createRpcClient(config)` and `createStorageManager(storage)` accept mock dependencies
+- **Regression tests** - RPC query tests verify filter structure to prevent breaking changes
+
+Example of mocking storage:
+```javascript
+const mockStorage = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+};
+const storage = createStorageManager(mockStorage);
+```
+
 ## Deployment
 
 Deployed on Vercel with automatic builds from main branch. Network selection is client-side only - no server-side environment variables needed.
@@ -124,3 +181,4 @@ Deployed on Vercel with automatic builds from main branch. Network selection is 
 - **Stellar SDK** - Soroban RPC client, XDR parsing
 - **stellar-xdr-json** - WASM-based XDR to JSON decoder
 - **Soroban RPC** - Uses `getEvents` API with `order: desc` for recent-first results
+- **Jest** - Testing framework with ESM support
