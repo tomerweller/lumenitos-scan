@@ -69,6 +69,15 @@ export default function AccountPage({ params }) {
       const manualAssets = getTrackedAssets();
       const manualContractIds = manualAssets.map(a => a.contractId);
 
+      // Build SAC metadata cache from transfer events with sacSymbol (4th topic)
+      // These are standard Stellar assets with known symbol and decimals=7
+      const sacMetadataCache = {};
+      for (const t of transfers) {
+        if (t.sacSymbol && t.contractId) {
+          sacMetadataCache[t.contractId] = { symbol: t.sacSymbol, decimals: 7 };
+        }
+      }
+
       // Merge and dedupe contract IDs
       const allContractIds = [...new Set([...autoContractIds, ...manualContractIds])];
 
@@ -79,10 +88,29 @@ export default function AccountPage({ params }) {
       }
 
       // Step 3: Fetch metadata and balances for each token in parallel
+      // For SAC tokens (with cached metadata), skip metadata fetch
       const tokenData = await Promise.all(
         allContractIds.map(async (contractId) => {
           const isManual = manualContractIds.includes(contractId);
+          const cachedSac = sacMetadataCache[contractId];
+
           try {
+            if (cachedSac) {
+              // SAC token - we already have metadata, only fetch balance
+              const rawBalance = await getTokenBalance(address, contractId);
+              const displayBalance = rawToDisplay(rawBalance, 7);
+              return {
+                contractId,
+                symbol: cachedSac.symbol,
+                name: `${cachedSac.symbol} (Stellar Asset)`,
+                rawBalance,
+                balance: formatTokenBalance(displayBalance, 7),
+                decimals: 7,
+                isManual,
+              };
+            }
+
+            // Non-SAC token - fetch both metadata and balance
             const [metadata, rawBalance] = await Promise.all([
               getTokenMetadata(contractId),
               getTokenBalance(address, contractId),
@@ -103,8 +131,8 @@ export default function AccountPage({ params }) {
             console.log(`Token data unavailable for ${contractId}`);
             return {
               contractId,
-              symbol: '???',
-              name: 'Unknown',
+              symbol: cachedSac?.symbol || '???',
+              name: cachedSac ? `${cachedSac.symbol} (Stellar Asset)` : 'Unknown',
               rawBalance: '0',
               balance: '0',
               decimals: 7,

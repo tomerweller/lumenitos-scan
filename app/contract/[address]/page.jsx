@@ -59,11 +59,38 @@ export default function ContractPage({ params }) {
       // Extract unique contract IDs from transfers to get token metadata
       const contractIds = extractContractIds(transferList);
 
+      // Build SAC metadata cache from transfer events with sacSymbol (4th topic)
+      // These are standard Stellar assets with known symbol and decimals=7
+      const sacMetadataCache = {};
+      for (const t of transferList) {
+        if (t.sacSymbol && t.contractId) {
+          sacMetadataCache[t.contractId] = { symbol: t.sacSymbol, decimals: 7 };
+        }
+      }
+
       if (contractIds.length > 0) {
         // Fetch metadata and balances for each token in parallel
+        // For SAC tokens (with cached metadata), skip metadata fetch
         const tokenData = await Promise.all(
           contractIds.map(async (contractId) => {
+            const cachedSac = sacMetadataCache[contractId];
+
             try {
+              if (cachedSac) {
+                // SAC token - we already have metadata, only fetch balance
+                const rawBalance = await getTokenBalance(address, contractId);
+                const displayBalance = rawToDisplay(rawBalance, 7);
+                return {
+                  contractId,
+                  symbol: cachedSac.symbol,
+                  name: `${cachedSac.symbol} (Stellar Asset)`,
+                  rawBalance,
+                  balance: formatTokenBalance(displayBalance, 7),
+                  decimals: 7,
+                };
+              }
+
+              // Non-SAC token - fetch both metadata and balance
               const [metadata, rawBalance] = await Promise.all([
                 getTokenMetadata(contractId),
                 getTokenBalance(address, contractId),
@@ -79,11 +106,11 @@ export default function ContractPage({ params }) {
                 decimals,
               };
             } catch (e) {
-              console.error(`Error fetching token data for ${contractId}:`, e);
+              console.log(`Token data unavailable for ${contractId}`);
               return {
                 contractId,
-                symbol: '???',
-                name: 'Unknown',
+                symbol: cachedSac?.symbol || '???',
+                name: cachedSac ? `${cachedSac.symbol} (Stellar Asset)` : 'Unknown',
                 rawBalance: '0',
                 balance: '0',
                 decimals: 7,
@@ -224,7 +251,7 @@ export default function ContractPage({ params }) {
                           <AddressLink address={t.to} />
                           {': '}
                           {formatAmount(t.amount, t.contractId)}{' '}
-                          <Link href={`/token/${t.contractId}`}>{getSymbol(t.contractId)}</Link>
+                          <Link href={`/token/${t.contractId}`}>{t.sacSymbol || getSymbol(t.contractId)}</Link>
                         </p>
                       ))}
                       <small>
