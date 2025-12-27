@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   shortenAddressSmall,
   getAddressPath,
@@ -17,8 +18,11 @@ import {
  * @param {string} props.address - The full address
  * @param {string} [props.display] - Optional custom display text
  * @param {boolean} [props.short] - Use shorter format (4..4 vs 6....6)
+ * @param {boolean} [props.nested] - Render as span with click navigation (for use inside Link cards)
  */
-export default function AddressLink({ address, display, short = true }) {
+export default function AddressLink({ address, display, short = true, nested = false }) {
+  const router = useRouter();
+
   if (!address) return <span>?</span>;
 
   const displayText = display || (short ? shortenAddressSmall(address) : address);
@@ -28,9 +32,28 @@ export default function AddressLink({ address, display, short = true }) {
     return <span className="text-secondary">{displayText}</span>;
   }
 
-  // All other address types use internal Next.js Link routing
+  const href = getAddressPath(address);
+
+  // When nested inside a Link, render as span to avoid invalid nested <a> tags
+  // Use programmatic navigation with stopPropagation to prevent parent card click
+  if (nested) {
+    return (
+      <span
+        className="nested-link"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          router.push(href);
+        }}
+      >
+        {displayText}
+      </span>
+    );
+  }
+
+  // Standard Link for non-nested usage
   return (
-    <Link href={getAddressPath(address)}>
+    <Link href={href}>
       {displayText}
     </Link>
   );

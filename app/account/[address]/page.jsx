@@ -471,19 +471,19 @@ export default function AccountPage({ params }) {
                               {item.type === 'fee' ? (
                                 <span className="text-secondary">transaction fee</span>
                               ) : item.type === 'mint' ? (
-                                <>→ <AddressLink address={item.to} /></>
+                                <>→ <AddressLink address={item.to} nested /></>
                               ) : item.type === 'burn' ? (
-                                <AddressLink address={item.from} />
+                                <AddressLink address={item.from} nested />
                               ) : item.type === 'clawback' ? (
                                 <>
-                                  <AddressLink address={item.from} />
-                                  <span className="text-secondary"> (by <AddressLink address={item.to} />)</span>
+                                  <AddressLink address={item.from} nested />
+                                  <span className="text-secondary"> (by <AddressLink address={item.to} nested />)</span>
                                 </>
                               ) : (
                                 <>
-                                  <AddressLink address={item.from} />
+                                  <AddressLink address={item.from} nested />
                                   {' → '}
-                                  <AddressLink address={item.to} />
+                                  <AddressLink address={item.to} nested />
                                 </>
                               )}
                             </div>

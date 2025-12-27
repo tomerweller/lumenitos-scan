@@ -288,14 +288,14 @@ export default function ContractPage({ params }) {
 
                             <div className="activity-addresses">
                               {t.type === 'mint' ? (
-                                <>→ <AddressLink address={t.to} /></>
+                                <>→ <AddressLink address={t.to} nested /></>
                               ) : t.type === 'burn' || t.type === 'clawback' ? (
-                                <AddressLink address={t.from} />
+                                <AddressLink address={t.from} nested />
                               ) : (
                                 <>
-                                  <AddressLink address={t.from} />
+                                  <AddressLink address={t.from} nested />
                                   {' → '}
-                                  <AddressLink address={t.to} />
+                                  <AddressLink address={t.to} nested />
                                 </>
                               )}
                             </div>

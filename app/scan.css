@@ -404,6 +404,17 @@ a.card-item:hover {
   margin: 4px 0;
 }
 
+/* Nested links inside clickable cards - styled as links but rendered as spans */
+.nested-link {
+  color: var(--primary-color);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.nested-link:hover {
+  opacity: 0.8;
+}
+
 .activity-description {
   font-size: 0.875em;
   color: var(--text-primary);

@@ -248,14 +248,14 @@ export default function ScanPage() {
 
                         <div className="activity-addresses">
                           {item.type === 'mint' ? (
-                            <>→ <AddressLink address={item.to} /></>
+                            <>→ <AddressLink address={item.to} nested /></>
                           ) : item.type === 'burn' ? (
-                            <AddressLink address={item.from} />
+                            <AddressLink address={item.from} nested />
                           ) : (
                             <>
-                              <AddressLink address={item.from} />
+                              <AddressLink address={item.from} nested />
                               {' → '}
-                              <AddressLink address={item.to} />
+                              <AddressLink address={item.to} nested />
                             </>
                           )}
                         </div>
