@@ -28,9 +28,9 @@ export default function ScanHeader() {
       <div className="scan-header-left">
         <h1><Link href="/">MINI✦SCAN</Link> <span className="beta-badge">beta</span></h1>
         <p className="subtitle">
-          a minimal stellar token explorer
+          A Minimal Stellar Token Explorer
           {oldestDate && latestDate && (
-            <span className="ledger-range"> · data: {oldestDate} – {latestDate}</span>
+            <span className="ledger-range"> · Data: {oldestDate} – {latestDate}</span>
           )}
         </p>
       </div>
