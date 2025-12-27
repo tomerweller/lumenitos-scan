@@ -42,13 +42,26 @@ export default function TokenPage({ params }) {
 
     try {
       // Fetch metadata and transfers in parallel
-      const [tokenMetadata, tokenTransfers] = await Promise.all([
+      // Metadata may fail for non-token contracts - that's ok
+      const [tokenMetadata, tokenTransfers] = await Promise.allSettled([
         getTokenMetadata(address),
         getTokenTransfers(address),
       ]);
 
-      setMetadata(tokenMetadata);
-      setTransfers(tokenTransfers);
+      // Use metadata if available, otherwise set defaults
+      if (tokenMetadata.status === 'fulfilled') {
+        setMetadata(tokenMetadata.value);
+      } else {
+        // Contract exists but isn't a token or metadata unavailable
+        setMetadata({ symbol: '???', name: 'Unknown', decimals: 7 });
+      }
+
+      // Transfers failing is a real error
+      if (tokenTransfers.status === 'fulfilled') {
+        setTransfers(tokenTransfers.value);
+      } else {
+        setTransfers([]);
+      }
     } catch (err) {
       console.error('Error loading token data:', err);
       setError(err.message);

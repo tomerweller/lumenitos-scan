@@ -52,7 +52,14 @@ export default function AccountPage({ params }) {
 
     try {
       // Step 1: Fetch unified activity (transfers + fees in single query)
-      const activityList = await getAccountActivity(address);
+      // Activity fetch may fail for new/inactive accounts - that's ok
+      let activityList = [];
+      try {
+        activityList = await getAccountActivity(address);
+      } catch (e) {
+        // Account may not have any activity or contract not found - continue with empty list
+        console.log('No activity found for account:', e.message);
+      }
       setActivity(activityList);
 
       // Step 2: Extract unique contract IDs from transfers + manually tracked assets
@@ -92,7 +99,8 @@ export default function AccountPage({ params }) {
               isManual,
             };
           } catch (e) {
-            console.error(`Error fetching token data for ${contractId}:`, e);
+            // Token metadata/balance fetch can fail for non-token contracts - that's ok
+            console.log(`Token data unavailable for ${contractId}`);
             return {
               contractId,
               symbol: '???',
