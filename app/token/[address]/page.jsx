@@ -162,11 +162,39 @@ export default function TokenPage({ params }) {
                     <div key={group.txHash} className="tx-group">
                       {group.events.map((t, eventIndex) => (
                         <p key={eventIndex} className="transfer-item">
-                          <AddressLink address={t.from} />
-                          {' → '}
-                          <AddressLink address={t.to} />
-                          {': '}
-                          {formatAmount(t.amount)} {getSymbol()}
+                          {t.type === 'mint' ? (
+                            <>
+                              <span className="success">+{formatAmount(t.amount)}</span> {getSymbol()}
+                              {' → '}
+                              <AddressLink address={t.to} />
+                              {' '}
+                              <span className="text-secondary">(minted)</span>
+                            </>
+                          ) : t.type === 'burn' ? (
+                            <>
+                              <AddressLink address={t.from} />
+                              {': '}
+                              <span>-{formatAmount(t.amount)}</span> {getSymbol()}
+                              {' '}
+                              <span className="text-secondary">(burned)</span>
+                            </>
+                          ) : t.type === 'clawback' ? (
+                            <>
+                              <AddressLink address={t.from} />
+                              {': '}
+                              <span className="error">-{formatAmount(t.amount)}</span> {getSymbol()}
+                              {' '}
+                              <span className="text-secondary">(clawback)</span>
+                            </>
+                          ) : (
+                            <>
+                              <AddressLink address={t.from} />
+                              {' → '}
+                              <AddressLink address={t.to} />
+                              {': '}
+                              {formatAmount(t.amount)} {getSymbol()}
+                            </>
+                          )}
                         </p>
                       ))}
                       <small>

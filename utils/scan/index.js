@@ -223,6 +223,165 @@ function parseTransferEvent(event, targetAddress) {
 }
 
 /**
+ * Check if an ScVal is an address type
+ * @param {object} scVal - The ScVal to check
+ * @returns {boolean} True if the ScVal is an address
+ */
+function isAddressScVal(scVal) {
+  if (!scVal) return false;
+  try {
+    return scVal.switch().name === 'scvAddress';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Parse a CAP-67 token event (transfer, mint, burn, clawback) into structured format
+ * Only returns events that conform to the CAP-67 specification with proper address topics
+ * @param {object} event - The event from getEvents
+ * @param {string} targetAddress - Address we're tracking (optional)
+ * @returns {object|null} Parsed event info or null if unrecognized or non-conforming
+ */
+function parseTokenEvent(event, targetAddress = null) {
+  // Parse topic ScVals from base64
+  const topics = (event.topic || []).map(topicXdr => {
+    try {
+      return StellarSdk.xdr.ScVal.fromXDR(topicXdr, 'base64');
+    } catch {
+      return null;
+    }
+  });
+
+  if (!topics[0]) return null;
+
+  // Get event type from first topic
+  let eventType;
+  try {
+    eventType = StellarSdk.scValToNative(topics[0]);
+  } catch {
+    return null;
+  }
+
+  let amount = 0n;
+  if (event.value) {
+    try {
+      const valueScVal = StellarSdk.xdr.ScVal.fromXDR(event.value, 'base64');
+      amount = scValToAmount(valueScVal);
+    } catch {
+      amount = 0n;
+    }
+  }
+
+  // Extract SAC asset info from last topic if present
+  let sacSymbol = null;
+  let sacName = null;
+  const lastTopic = topics[topics.length - 1];
+  if (lastTopic) {
+    try {
+      const assetStr = StellarSdk.scValToNative(lastTopic);
+      if (typeof assetStr === 'string') {
+        if (assetStr.includes(':')) {
+          sacSymbol = assetStr.split(':')[0];
+          sacName = assetStr;
+        } else if (assetStr === 'native') {
+          sacSymbol = 'XLM';
+          sacName = 'native';
+        }
+      }
+    } catch {
+      // Not a string topic, ignore
+    }
+  }
+
+  const baseEvent = {
+    txHash: event.txHash,
+    ledger: event.ledger,
+    timestamp: event.ledgerClosedAt,
+    contractId: event.contractId,
+    amount,
+    sacSymbol,
+    sacName,
+  };
+
+  // Parse based on event type - validate CAP-67 format with proper address topics
+  // transfer: [symbol, from, to, asset?] - topics[1] and [2] must be addresses
+  // mint: [symbol, admin, to, asset?] - topics[1] and [2] must be addresses
+  // burn: [symbol, from, asset?] - topic[1] must be address
+  // clawback: [symbol, admin, from, asset?] - topics[1] and [2] must be addresses
+
+  if (eventType === 'transfer') {
+    // Validate CAP-67 format: topics[1] and [2] must be addresses
+    if (!isAddressScVal(topics[1]) || !isAddressScVal(topics[2])) {
+      return null; // Non-conforming event
+    }
+    const from = scValToAddress(topics[1]);
+    const to = scValToAddress(topics[2]);
+    const direction = from === targetAddress ? 'sent' : 'received';
+    return {
+      ...baseEvent,
+      type: 'transfer',
+      from,
+      to,
+      direction,
+      counterparty: direction === 'sent' ? to : from,
+    };
+  }
+
+  if (eventType === 'mint') {
+    // Validate CAP-67 format: topics[1] and [2] must be addresses
+    if (!isAddressScVal(topics[1]) || !isAddressScVal(topics[2])) {
+      return null; // Non-conforming event (e.g., KALE has asset string in topic[2])
+    }
+    const admin = scValToAddress(topics[1]);
+    const to = scValToAddress(topics[2]);
+    return {
+      ...baseEvent,
+      type: 'mint',
+      from: admin, // admin who minted
+      to,          // recipient
+      direction: 'received',
+      counterparty: admin,
+    };
+  }
+
+  if (eventType === 'burn') {
+    // Validate CAP-67 format: topic[1] must be address
+    if (!isAddressScVal(topics[1])) {
+      return null; // Non-conforming event
+    }
+    const from = scValToAddress(topics[1]);
+    return {
+      ...baseEvent,
+      type: 'burn',
+      from,
+      to: null,    // burned, no recipient
+      direction: 'sent',
+      counterparty: null,
+    };
+  }
+
+  if (eventType === 'clawback') {
+    // Validate CAP-67 format: topics[1] and [2] must be addresses
+    if (!isAddressScVal(topics[1]) || !isAddressScVal(topics[2])) {
+      return null; // Non-conforming event
+    }
+    const admin = scValToAddress(topics[1]);
+    const from = scValToAddress(topics[2]);
+    return {
+      ...baseEvent,
+      type: 'clawback',
+      from,        // account tokens were taken from
+      to: admin,   // admin who clawed back
+      direction: 'sent',
+      counterparty: admin,
+    };
+  }
+
+  return null; // Unrecognized event type
+}
+
+/**
  * Make a direct JSON-RPC call to the RPC server
  * This bypasses the SDK to use the new order parameter
  * @param {string} method - RPC method name
@@ -271,24 +430,30 @@ async function getLatestLedger() {
 }
 
 /**
- * Get recent transfers for an address (any token)
- * Fetches SEP-41 transfer events without contract filtering
- * Uses a single query with 2 filters (sent + received) for efficiency
- * @param {string} address - Address to fetch transfers for
- * @param {number} limit - Maximum transfers to return (default 200)
- * @returns {Promise<Array>} Array of parsed transfers
+ * Get recent token activity for an address (any token)
+ * Fetches transfer, mint, burn, and clawback events (CAP-67)
+ * Uses a single query with multiple filters for efficiency
+ * @param {string} address - Address to fetch activity for
+ * @param {number} limit - Maximum events to return (default 200)
+ * @returns {Promise<Array>} Array of parsed token events
  */
 export async function getRecentTransfers(address, limit = 200) {
   try {
     const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
+    const mintSymbol = StellarSdk.nativeToScVal('mint', { type: 'symbol' });
+    const burnSymbol = StellarSdk.nativeToScVal('burn', { type: 'symbol' });
+    const clawbackSymbol = StellarSdk.nativeToScVal('clawback', { type: 'symbol' });
     const targetScVal = StellarSdk.nativeToScVal(StellarSdk.Address.fromString(address), {
       type: 'address',
     });
 
     const startLedger = await getLatestLedger();
 
-    // Single query with 2 filters: transfers FROM and TO the address
-    // Use 2x limit since we're combining 2 filter types, then dedupe
+    // Single query with 5 filters for all token activity involving this address:
+    // - transfer: [symbol, from, to, asset?] - match from OR to
+    // - mint: [symbol, admin, to, asset?] - match to (recipient)
+    // - burn: [symbol, from, asset?] - match from
+    // - clawback: [symbol, admin, from, asset?] - match from
     const result = await rpcCall('getEvents', {
       startLedger: startLedger,
       filters: [
@@ -302,25 +467,43 @@ export async function getRecentTransfers(address, limit = 200) {
           type: 'contract',
           topics: [[transferSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
         },
+        // mint TO the address (topic[2] = recipient)
+        {
+          type: 'contract',
+          topics: [[mintSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+        },
+        // burn FROM the address (topic[1] = from)
+        {
+          type: 'contract',
+          topics: [[burnSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '**']],
+        },
+        // clawback FROM the address (topic[2] = from)
+        {
+          type: 'contract',
+          topics: [[clawbackSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+        },
       ],
-      pagination: { limit: limit * 2, order: 'desc' }
+      pagination: { limit: limit * 5, order: 'desc' }
     });
 
     const events = result.events || [];
 
-    // Dedupe by event ID (same event can match both filters if from=to=address)
+    // Dedupe by event ID and parse based on event type
     const uniqueById = new Map();
     for (const event of events) {
-      if (!uniqueById.has(event.id)) {
-        uniqueById.set(event.id, parseTransferEvent(event, address));
+      if (uniqueById.has(event.id)) continue;
+
+      const parsed = parseTokenEvent(event, address);
+      if (parsed) {
+        uniqueById.set(event.id, parsed);
       }
     }
 
     // Sort by ledger descending and limit
-    const transfers = [...uniqueById.values()];
-    transfers.sort((a, b) => b.ledger - a.ledger);
+    const activity = [...uniqueById.values()];
+    activity.sort((a, b) => b.ledger - a.ledger);
 
-    return transfers.slice(0, limit);
+    return activity.slice(0, limit);
   } catch (error) {
     console.error('Error fetching transfer history:', error);
     throw error;
@@ -424,8 +607,8 @@ function parseFeeEvent(event, address) {
 }
 
 /**
- * Get unified account activity (transfers + fees)
- * Combines SEP-41 transfer events and CAP-67 fee events in a single RPC query
+ * Get unified account activity (transfers, mint, burn, clawback + fees)
+ * Uses two RPC queries (max 5 filters each) and merges results
  * @param {string} address - Address to fetch activity for
  * @param {number} limit - Maximum events to return (default 200)
  * @returns {Promise<Array>} Array of parsed activity items, sorted by timestamp desc
@@ -433,6 +616,9 @@ function parseFeeEvent(event, address) {
 export async function getAccountActivity(address, limit = 200) {
   try {
     const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
+    const mintSymbol = StellarSdk.nativeToScVal('mint', { type: 'symbol' });
+    const burnSymbol = StellarSdk.nativeToScVal('burn', { type: 'symbol' });
+    const clawbackSymbol = StellarSdk.nativeToScVal('clawback', { type: 'symbol' });
     const feeSymbol = StellarSdk.nativeToScVal('fee', { type: 'symbol' });
     const targetScVal = StellarSdk.nativeToScVal(StellarSdk.Address.fromString(address), {
       type: 'address',
@@ -441,36 +627,62 @@ export async function getAccountActivity(address, limit = 200) {
 
     const startLedger = await getLatestLedger();
 
-    // Single query with 3 filters: transfers FROM, transfers TO, and fee events
-    // Use 3x limit since we're combining 3 filter types, then dedupe and trim
-    const result = await rpcCall('getEvents', {
-      startLedger: startLedger,
-      filters: [
-        // transfers FROM the address
-        {
-          type: 'contract',
-          topics: [[transferSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '*', '**']],
-        },
-        // transfers TO the address
-        {
-          type: 'contract',
-          topics: [[transferSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
-        },
-        // fee events for the address (CAP-67)
-        {
-          type: 'contract',
-          contractIds: [xlmContractId],
-          topics: [[feeSymbol.toXDR('base64'), targetScVal.toXDR('base64')]],
-        },
-      ],
-      pagination: { limit: limit * 3, order: 'desc' }
-    });
+    // RPC allows max 5 filters per request, so we split into two queries:
+    // Query 1: Token events (5 filters)
+    // Query 2: Fee events (1 filter)
+    const [tokenResult, feeResult] = await Promise.all([
+      // Token events query (5 filters)
+      rpcCall('getEvents', {
+        startLedger: startLedger,
+        filters: [
+          // transfers FROM the address
+          {
+            type: 'contract',
+            topics: [[transferSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '*', '**']],
+          },
+          // transfers TO the address
+          {
+            type: 'contract',
+            topics: [[transferSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+          },
+          // mint TO the address (topic[2] = recipient)
+          {
+            type: 'contract',
+            topics: [[mintSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+          },
+          // burn FROM the address (topic[1] = from)
+          {
+            type: 'contract',
+            topics: [[burnSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '**']],
+          },
+          // clawback FROM the address (topic[2] = from)
+          {
+            type: 'contract',
+            topics: [[clawbackSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+          },
+        ],
+        pagination: { limit: limit * 5, order: 'desc' }
+      }),
+      // Fee events query (1 filter)
+      rpcCall('getEvents', {
+        startLedger: startLedger,
+        filters: [
+          {
+            type: 'contract',
+            contractIds: [xlmContractId],
+            topics: [[feeSymbol.toXDR('base64'), targetScVal.toXDR('base64')]],
+          },
+        ],
+        pagination: { limit: limit, order: 'desc' }
+      }),
+    ]);
 
-    const events = result.events || [];
+    // Combine events from both queries
+    const allEvents = [...(tokenResult.events || []), ...(feeResult.events || [])];
 
-    // Parse each event based on first topic (transfer vs fee), dedupe by event ID
+    // Parse each event based on first topic, dedupe by event ID
     const uniqueById = new Map();
-    for (const event of events) {
+    for (const event of allEvents) {
       if (uniqueById.has(event.id)) continue;
 
       // Detect event type from first topic
@@ -479,10 +691,14 @@ export async function getAccountActivity(address, limit = 200) {
 
       try {
         const symbol = StellarSdk.scValToNative(StellarSdk.xdr.ScVal.fromXDR(firstTopic, 'base64'));
-        if (symbol === 'transfer') {
-          uniqueById.set(event.id, parseTransferEvent(event, address));
-        } else if (symbol === 'fee') {
+        if (symbol === 'fee') {
           uniqueById.set(event.id, parseFeeEvent(event, address));
+        } else {
+          // Use parseTokenEvent for transfer/mint/burn/clawback
+          const parsed = parseTokenEvent(event, address);
+          if (parsed) {
+            uniqueById.set(event.id, parsed);
+          }
         }
       } catch {
         // Skip events we can't parse
@@ -502,70 +718,136 @@ export async function getAccountActivity(address, limit = 200) {
 
 /**
  * Get recent token activity across all contracts (network-wide)
- * Fetches SEP-41 transfer events
+ * Fetches transfer, mint, burn, and clawback events (CAP-67)
+ * Falls back to transfers-only if combined query hits RPC limits
  * @param {number} limit - Maximum events to return (default 50)
- * @returns {Promise<Array>} Array of parsed transfer events
+ * @returns {Promise<Array>} Array of parsed token events
  */
 export async function getRecentTokenActivity(limit = 50) {
-  try {
-    const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
-    const startLedger = await getLatestLedger();
+  const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
+  const mintSymbol = StellarSdk.nativeToScVal('mint', { type: 'symbol' });
+  const burnSymbol = StellarSdk.nativeToScVal('burn', { type: 'symbol' });
+  const clawbackSymbol = StellarSdk.nativeToScVal('clawback', { type: 'symbol' });
+  const startLedger = await getLatestLedger();
 
+  // Helper to parse events into activity array
+  const parseEvents = (events) => {
+    const uniqueById = new Map();
+    for (const event of events) {
+      if (uniqueById.has(event.id)) continue;
+      const parsed = parseTokenEvent(event);
+      if (parsed) {
+        uniqueById.set(event.id, parsed);
+      }
+    }
+    const activity = [...uniqueById.values()];
+    activity.sort((a, b) => b.ledger - a.ledger);
+    return activity.slice(0, limit);
+  };
+
+  // Try combined query first (may hit RPC limits on busy networks)
+  try {
     const result = await rpcCall('getEvents', {
       startLedger: startLedger,
       filters: [
-        {
-          type: 'contract',
-          topics: [[transferSymbol.toXDR('base64'), '*', '*', '**']],
-        }
+        { type: 'contract', topics: [[transferSymbol.toXDR('base64'), '*', '*', '**']] },
+        { type: 'contract', topics: [[mintSymbol.toXDR('base64'), '*', '*', '**']] },
+        { type: 'contract', topics: [[burnSymbol.toXDR('base64'), '*', '**']] },
+        { type: 'contract', topics: [[clawbackSymbol.toXDR('base64'), '*', '*', '**']] },
       ],
-      pagination: {
-        limit: limit,
-        order: 'desc'
-      }
+      pagination: { limit: limit * 4, order: 'desc' }
     });
-
-    const events = result.events || [];
-    return events.map(event => parseTransferEventGeneric(event));
+    return parseEvents(result.events || []);
   } catch (error) {
+    // If we hit processing limits (-32001), fall back to transfers only
+    if (error.code === -32001) {
+      console.warn('Combined query hit RPC limits, falling back to transfers only');
+      try {
+        const result = await rpcCall('getEvents', {
+          startLedger: startLedger,
+          filters: [
+            { type: 'contract', topics: [[transferSymbol.toXDR('base64'), '*', '*', '**']] },
+          ],
+          pagination: { limit, order: 'desc' }
+        });
+        return parseEvents(result.events || []);
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        throw fallbackError;
+      }
+    }
     console.error('Error fetching recent token activity:', error);
     throw error;
   }
 }
 
 /**
- * Get recent transfers for a specific token contract
- * Fetches SEP-41 transfer events for a specific contract
- * Supports both 4-topic events (transfer, from, to, amount) and 3-topic events (transfer, from, to)
- * @param {string} tokenContractId - Token contract ID to fetch transfers for
- * @param {number} limit - Maximum transfers to return (default 1000)
- * @returns {Promise<Array>} Array of parsed transfers
+ * Get recent activity for a specific token contract
+ * Fetches transfer, mint, burn, and clawback events (CAP-67) for a specific contract
+ * @param {string} tokenContractId - Token contract ID to fetch activity for
+ * @param {number} limit - Maximum events to return (default 1000)
+ * @returns {Promise<Array>} Array of parsed token events
  */
 export async function getTokenTransfers(tokenContractId, limit = 1000) {
   try {
     const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
+    const mintSymbol = StellarSdk.nativeToScVal('mint', { type: 'symbol' });
+    const burnSymbol = StellarSdk.nativeToScVal('burn', { type: 'symbol' });
+    const clawbackSymbol = StellarSdk.nativeToScVal('clawback', { type: 'symbol' });
     const startLedger = await getLatestLedger();
 
-    // Filter for all transfer events from this specific contract
-    // Use ** for 4th topic to match both 3-topic and 4-topic events
+    // Single query with 4 filters for all token activity from this contract
     const result = await rpcCall('getEvents', {
       startLedger: startLedger,
       filters: [
+        // transfers
         {
           type: 'contract',
           contractIds: [tokenContractId],
           topics: [[transferSymbol.toXDR('base64'), '*', '*', '**']],
-        }
+        },
+        // mints
+        {
+          type: 'contract',
+          contractIds: [tokenContractId],
+          topics: [[mintSymbol.toXDR('base64'), '*', '*', '**']],
+        },
+        // burns
+        {
+          type: 'contract',
+          contractIds: [tokenContractId],
+          topics: [[burnSymbol.toXDR('base64'), '*', '**']],
+        },
+        // clawbacks
+        {
+          type: 'contract',
+          contractIds: [tokenContractId],
+          topics: [[clawbackSymbol.toXDR('base64'), '*', '*', '**']],
+        },
       ],
       pagination: {
-        limit: limit,
+        limit: limit * 4,
         order: 'desc'
       }
     });
 
     const events = result.events || [];
-    // Parse events without a target address (shows all transfers)
-    return events.map(event => parseTransferEventGeneric(event));
+
+    // Parse and dedupe by event ID
+    const uniqueById = new Map();
+    for (const event of events) {
+      if (uniqueById.has(event.id)) continue;
+      const parsed = parseTokenEvent(event);
+      if (parsed) {
+        uniqueById.set(event.id, parsed);
+      }
+    }
+
+    // Sort by ledger descending and limit
+    const activity = [...uniqueById.values()];
+    activity.sort((a, b) => b.ledger - a.ledger);
+
+    return activity.slice(0, limit);
   } catch (error) {
     console.error('Error fetching token transfers:', error);
     throw error;

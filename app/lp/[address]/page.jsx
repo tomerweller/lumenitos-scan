@@ -197,12 +197,43 @@ export default function LiquidityPoolPage({ params }) {
                         const ft = formatTransfer(t);
                         return (
                           <p key={eventIndex} className="transfer-item">
-                            <AddressLink address={t.from} />
-                            {' → '}
-                            <AddressLink address={t.to} />
-                            {': '}
-                            {ft.formattedAmount}{' '}
-                            <Link href={`/token/${t.contractId}`}>{ft.symbol}</Link>
+                            {t.type === 'mint' ? (
+                              <>
+                                <span className="success">+{ft.formattedAmount}</span>{' '}
+                                <Link href={`/token/${t.contractId}`}>{ft.symbol}</Link>
+                                {' → '}
+                                <AddressLink address={t.to} />
+                                {' '}
+                                <span className="text-secondary">(minted)</span>
+                              </>
+                            ) : t.type === 'burn' ? (
+                              <>
+                                <AddressLink address={t.from} />
+                                {': '}
+                                <span>-{ft.formattedAmount}</span>{' '}
+                                <Link href={`/token/${t.contractId}`}>{ft.symbol}</Link>
+                                {' '}
+                                <span className="text-secondary">(burned)</span>
+                              </>
+                            ) : t.type === 'clawback' ? (
+                              <>
+                                <AddressLink address={t.from} />
+                                {': '}
+                                <span className="error">-{ft.formattedAmount}</span>{' '}
+                                <Link href={`/token/${t.contractId}`}>{ft.symbol}</Link>
+                                {' '}
+                                <span className="text-secondary">(clawback)</span>
+                              </>
+                            ) : (
+                              <>
+                                <AddressLink address={t.from} />
+                                {' → '}
+                                <AddressLink address={t.to} />
+                                {': '}
+                                {ft.formattedAmount}{' '}
+                                <Link href={`/token/${t.contractId}`}>{ft.symbol}</Link>
+                              </>
+                            )}
                           </p>
                         );
                       })}

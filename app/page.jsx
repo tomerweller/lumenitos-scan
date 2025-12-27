@@ -217,12 +217,43 @@ export default function ScanPage() {
                     const formatted = formatTransfer(item);
                     return (
                       <p key={eventIndex} className="transfer-item">
-                        <AddressLink address={item.from} />
-                        {' → '}
-                        <AddressLink address={item.to} />
-                        {': '}
-                        {formatted.formattedAmount}{' '}
-                        <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                        {item.type === 'mint' ? (
+                          <>
+                            <span className="success">+{formatted.formattedAmount}</span>{' '}
+                            <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                            {' → '}
+                            <AddressLink address={item.to} />
+                            {' '}
+                            <span className="text-secondary">(minted)</span>
+                          </>
+                        ) : item.type === 'burn' ? (
+                          <>
+                            <AddressLink address={item.from} />
+                            {': '}
+                            <span>-{formatted.formattedAmount}</span>{' '}
+                            <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                            {' '}
+                            <span className="text-secondary">(burned)</span>
+                          </>
+                        ) : item.type === 'clawback' ? (
+                          <>
+                            <AddressLink address={item.from} />
+                            {': '}
+                            <span className="error">-{formatted.formattedAmount}</span>{' '}
+                            <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                            {' '}
+                            <span className="text-secondary">(clawback)</span>
+                          </>
+                        ) : (
+                          <>
+                            <AddressLink address={item.from} />
+                            {' → '}
+                            <AddressLink address={item.to} />
+                            {': '}
+                            {formatted.formattedAmount}{' '}
+                            <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                          </>
+                        )}
                       </p>
                     );
                   })}

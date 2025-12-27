@@ -380,6 +380,30 @@ export default function AccountPage({ params }) {
                                   ({formatted.isRefund ? 'refund' : 'fee'})
                                 </span>
                               </>
+                            ) : item.type === 'mint' ? (
+                              // Mint event display
+                              <>
+                                <span className="success">+{formatted.formattedAmount}</span>{' '}
+                                <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                                {' '}
+                                <span className="text-secondary">(minted)</span>
+                              </>
+                            ) : item.type === 'burn' ? (
+                              // Burn event display
+                              <>
+                                <span>-{formatted.formattedAmount}</span>{' '}
+                                <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                                {' '}
+                                <span className="text-secondary">(burned)</span>
+                              </>
+                            ) : item.type === 'clawback' ? (
+                              // Clawback event display
+                              <>
+                                <span className="error">-{formatted.formattedAmount}</span>{' '}
+                                <Link href={`/token/${item.contractId}`}>{formatted.symbol}</Link>
+                                {' '}
+                                <span className="text-secondary">(clawback by <AddressLink address={item.to} />)</span>
+                              </>
                             ) : (
                               // Transfer event display - arrow format matching main page
                               <>
