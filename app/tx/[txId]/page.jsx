@@ -447,6 +447,15 @@ export default function TransactionPage({ params }) {
           {expandedSections.operations !== false && operations.length > 0 && (
             <div className="card" style={{ marginTop: '8px' }}>
               {operations.map((op) => {
+                // Format operation type from snake_case to Title Case
+                const formatOpType = (type) => {
+                  if (!type) return 'Unknown';
+                  return type
+                    .split('_')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+                };
+
                 // Render description with linked addresses
                 const renderOpDescription = () => {
                   const { description, details } = op;
@@ -456,7 +465,6 @@ export default function TransactionPage({ params }) {
                   if (details) {
                     for (const [key, value] of Object.entries(details)) {
                       if (typeof value === 'string' && (value.startsWith('G') || value.startsWith('C') || value.startsWith('L')) && value.length >= 56) {
-                        // Find the shortened version in description
                         const shortened = value.substring(0, 5);
                         if (description.includes(shortened)) {
                           addressMap[shortened] = value;
@@ -465,12 +473,10 @@ export default function TransactionPage({ params }) {
                     }
                   }
 
-                  // If no addresses to link, return plain description
                   if (Object.keys(addressMap).length === 0) {
                     return description;
                   }
 
-                  // Split description and replace shortened addresses with links
                   const parts = [];
                   let remaining = description;
                   let key = 0;
@@ -478,16 +484,13 @@ export default function TransactionPage({ params }) {
                   for (const [shortened, fullAddr] of Object.entries(addressMap)) {
                     const idx = remaining.indexOf(shortened);
                     if (idx !== -1) {
-                      // Add text before the address
                       if (idx > 0) {
                         parts.push(remaining.substring(0, idx));
                       }
-                      // Add the linked address
                       parts.push(<Link key={key++} href={getAddressPath(fullAddr)}>{shortened}</Link>);
                       remaining = remaining.substring(idx + shortened.length);
                     }
                   }
-                  // Add any remaining text
                   if (remaining) {
                     parts.push(remaining);
                   }
@@ -497,11 +500,20 @@ export default function TransactionPage({ params }) {
 
                 return (
                   <div key={op.index} className="card-item">
-                    <span className="op-index">{op.index + 1}.</span>{' '}
-                    {renderOpDescription()}
-                    {op.sourceAccount && (
-                      <span className="text-secondary"> (source: <Link href={getAddressPath(op.sourceAccount)}>{op.sourceAccountShort}</Link>)</span>
-                    )}
+                    <div className="activity-card-header">
+                      <div className="event-type">
+                        <span className="event-dot" />
+                        {formatOpType(op.type)}
+                      </div>
+                      {op.sourceAccount && (
+                        <Link href={getAddressPath(op.sourceAccount)} className="text-secondary">
+                          {op.sourceAccountShort}
+                        </Link>
+                      )}
+                    </div>
+                    <div className="activity-description">
+                      {renderOpDescription()}
+                    </div>
                   </div>
                 );
               })}

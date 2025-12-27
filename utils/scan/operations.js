@@ -230,10 +230,11 @@ export function formatOperation(op) {
     case 'path_payment_strict_receive': {
       const destination = data.destination || data.dest_asset ? (data.destination || '?') : '?';
       const sendAsset = formatAsset(data.send_asset || data.sendAsset);
+      const sendMax = formatAmount(data.send_max || data.sendMax);
       const destAsset = formatAsset(data.dest_asset || data.destAsset);
       const destAmount = formatAmount(data.dest_amount || data.destAmount);
-      description = `swap ${sendAsset} for ${destAmount} ${destAsset} to ${shortenAddress(destination)}`;
-      details = { destination, sendAsset, destAsset, destAmount };
+      description = `swap up to ${sendMax} ${sendAsset} for ${destAmount} ${destAsset} to ${shortenAddress(destination)}`;
+      details = { destination, sendAsset, sendMax, destAsset, destAmount };
       break;
     }
 
@@ -242,8 +243,9 @@ export function formatOperation(op) {
       const sendAsset = formatAsset(data.send_asset || data.sendAsset);
       const sendAmount = formatAmount(data.send_amount || data.sendAmount);
       const destAsset = formatAsset(data.dest_asset || data.destAsset);
-      description = `swap ${sendAmount} ${sendAsset} for ${destAsset} to ${shortenAddress(destination)}`;
-      details = { destination, sendAsset, sendAmount, destAsset };
+      const destMin = formatAmount(data.dest_min || data.destMin);
+      description = `swap ${sendAmount} ${sendAsset} for at least ${destMin} ${destAsset} to ${shortenAddress(destination)}`;
+      details = { destination, sendAsset, sendAmount, destAsset, destMin };
       break;
     }
 
@@ -339,18 +341,26 @@ export function formatOperation(op) {
       const asset = data.line || data.asset;
       const assetStr = formatAsset(asset);
       const limit = data.limit;
+      const formattedLimit = limit ? formatAmount(limit) : null;
 
       // Handle liquidity pool assets
       if (asset && (asset.liquidity_pool || asset.liquidityPool || asset.pool_share)) {
-        description = limit === '0' || limit === 0
-          ? 'remove trust for liquidity pool'
-          : 'trust liquidity pool';
+        if (limit === '0' || limit === 0) {
+          description = 'remove trust for liquidity pool';
+        } else if (formattedLimit && formattedLimit !== '922337203685.4775807') {
+          description = `trust liquidity pool (limit: ${formattedLimit})`;
+        } else {
+          description = 'trust liquidity pool';
+        }
       } else if (limit === '0' || limit === 0) {
         description = `remove trust ${assetStr}`;
+      } else if (formattedLimit && formattedLimit !== '922337203685.4775807') {
+        // Show limit if it's not the max int64 value
+        description = `trust ${assetStr} (limit: ${formattedLimit})`;
       } else {
         description = `trust ${assetStr}`;
       }
-      details = { asset: assetStr, limit };
+      details = { asset: assetStr, limit: formattedLimit };
       break;
     }
 
@@ -447,14 +457,42 @@ export function formatOperation(op) {
       const signer = data.signer;
 
       if (signer) {
-        description = `revoke signer sponsorship`;
+        const accountId = signer.account_id || signer.accountId || '?';
+        const signerKey = signer.signer_key || signer.signerKey;
+        const signerAddr = signerKey?.ed25519 || signerKey?.pre_auth_tx || signerKey?.sha256_hash || '?';
+        description = `revoke signer sponsorship for ${shortenAddress(signerAddr)} on ${shortenAddress(accountId)}`;
+        details = { accountId, signerKey: signerAddr };
       } else if (ledgerKey) {
         const keyType = Object.keys(ledgerKey)[0] || 'entry';
-        description = `revoke ${keyType} sponsorship`;
+        const keyData = ledgerKey[keyType];
+
+        // Extract relevant info based on type
+        if (keyType === 'account') {
+          const accountId = keyData?.account_id || keyData?.accountId || keyData || '?';
+          description = `revoke account sponsorship for ${shortenAddress(accountId)}`;
+        } else if (keyType === 'trustline' || keyType === 'trust_line') {
+          const accountId = keyData?.account_id || keyData?.accountId || '?';
+          const asset = formatAsset(keyData?.asset);
+          description = `revoke trustline sponsorship for ${shortenAddress(accountId)} on ${asset}`;
+        } else if (keyType === 'offer') {
+          const sellerId = keyData?.seller_id || keyData?.sellerId || '?';
+          const offerId = keyData?.offer_id || keyData?.offerId || '?';
+          description = `revoke offer #${offerId} sponsorship for ${shortenAddress(sellerId)}`;
+        } else if (keyType === 'data') {
+          const accountId = keyData?.account_id || keyData?.accountId || '?';
+          const dataName = keyData?.data_name || keyData?.dataName || '?';
+          description = `revoke data "${dataName}" sponsorship for ${shortenAddress(accountId)}`;
+        } else if (keyType === 'claimable_balance' || keyType === 'claimableBalance') {
+          const balanceId = keyData?.balance_id || keyData?.balanceId || '?';
+          description = `revoke claimable balance sponsorship ${shortenAddress(balanceId)}`;
+        } else {
+          description = `revoke ${keyType.replace(/_/g, ' ')} sponsorship`;
+        }
+        details = { keyType, keyData };
       } else {
         description = 'revoke sponsorship';
+        details = data;
       }
-      details = { ledgerKey, signer };
       break;
     }
 
@@ -480,23 +518,69 @@ export function formatOperation(op) {
     case 'set_trust_line_flags': {
       const trustor = data.trustor || '?';
       const asset = formatAsset(data.asset);
-      description = `set trustline flags for ${shortenAddress(trustor)} on ${asset}`;
-      details = { trustor, asset };
+      const setFlags = data.set_flags || data.setFlags;
+      const clearFlags = data.clear_flags || data.clearFlags;
+
+      // Decode flag values (TrustLineFlags enum)
+      const flagNames = (flags) => {
+        if (!flags) return [];
+        const names = [];
+        if (flags & 1) names.push('authorized');
+        if (flags & 2) names.push('authorized_to_maintain_liabilities');
+        if (flags & 4) names.push('clawback_enabled');
+        return names;
+      };
+
+      const setFlagNames = flagNames(setFlags);
+      const clearFlagNames = flagNames(clearFlags);
+
+      let flagDesc = '';
+      if (setFlagNames.length > 0) {
+        flagDesc += ` +${setFlagNames.join(', +')}`;
+      }
+      if (clearFlagNames.length > 0) {
+        flagDesc += ` -${clearFlagNames.join(', -')}`;
+      }
+
+      description = `set trustline flags for ${shortenAddress(trustor)} on ${asset}${flagDesc}`;
+      details = { trustor, asset, setFlags, clearFlags };
       break;
     }
 
     case 'liquidity_pool_deposit': {
+      const poolId = data.liquidity_pool_id || data.liquidityPoolId;
       const maxAmountA = formatAmount(data.max_amount_a || data.maxAmountA);
       const maxAmountB = formatAmount(data.max_amount_b || data.maxAmountB);
-      description = `deposit to liquidity pool (max ${maxAmountA} + ${maxAmountB})`;
-      details = { maxAmountA, maxAmountB };
+      const minPrice = formatPrice(data.min_price || data.minPrice);
+      const maxPrice = formatPrice(data.max_price || data.maxPrice);
+
+      let desc = `deposit to liquidity pool (max ${maxAmountA} + ${maxAmountB})`;
+      if (minPrice !== '?' && maxPrice !== '?') {
+        desc += ` at price ${minPrice}-${maxPrice}`;
+      }
+      if (poolId) {
+        desc += ` [${shortenAddress(poolId)}]`;
+      }
+      description = desc;
+      details = { poolId, maxAmountA, maxAmountB, minPrice, maxPrice };
       break;
     }
 
     case 'liquidity_pool_withdraw': {
+      const poolId = data.liquidity_pool_id || data.liquidityPoolId;
       const amount = formatAmount(data.amount);
-      description = `withdraw ${amount} shares from liquidity pool`;
-      details = { amount };
+      const minAmountA = formatAmount(data.min_amount_a || data.minAmountA);
+      const minAmountB = formatAmount(data.min_amount_b || data.minAmountB);
+
+      let desc = `withdraw ${amount} shares from liquidity pool`;
+      if (minAmountA !== '?' && minAmountB !== '?') {
+        desc += ` (min ${minAmountA} + ${minAmountB})`;
+      }
+      if (poolId) {
+        desc += ` [${shortenAddress(poolId)}]`;
+      }
+      description = desc;
+      details = { poolId, amount, minAmountA, minAmountB };
       break;
     }
 
