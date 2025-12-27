@@ -273,7 +273,7 @@ async function getLatestLedger() {
 /**
  * Get recent transfers for an address (any token)
  * Fetches SEP-41 transfer events without contract filtering
- * Uses separate queries for sent/received to avoid RPC processing limits
+ * Uses a single query with 2 filters (sent + received) for efficiency
  * @param {string} address - Address to fetch transfers for
  * @param {number} limit - Maximum transfers to return (default 200)
  * @returns {Promise<Array>} Array of parsed transfers
@@ -287,36 +287,40 @@ export async function getRecentTransfers(address, limit = 200) {
 
     const startLedger = await getLatestLedger();
 
-    // Split into separate queries to avoid RPC processing limit errors
-    const [sentResult, receivedResult] = await Promise.all([
-      // transfers FROM the address
-      rpcCall('getEvents', {
-        startLedger: startLedger,
-        filters: [{
+    // Single query with 2 filters: transfers FROM and TO the address
+    // Use 2x limit since we're combining 2 filter types, then dedupe
+    const result = await rpcCall('getEvents', {
+      startLedger: startLedger,
+      filters: [
+        // transfers FROM the address
+        {
           type: 'contract',
           topics: [[transferSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '*', '**']],
-        }],
-        pagination: { limit: limit, order: 'desc' }
-      }),
-      // transfers TO the address
-      rpcCall('getEvents', {
-        startLedger: startLedger,
-        filters: [{
+        },
+        // transfers TO the address
+        {
           type: 'contract',
           topics: [[transferSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
-        }],
-        pagination: { limit: limit, order: 'desc' }
-      })
-    ]);
+        },
+      ],
+      pagination: { limit: limit * 2, order: 'desc' }
+    });
 
-    const sentEvents = (sentResult.events || []).map(e => parseTransferEvent(e, address));
-    const receivedEvents = (receivedResult.events || []).map(e => parseTransferEvent(e, address));
+    const events = result.events || [];
 
-    // Merge and sort by ledger descending
-    const combined = [...sentEvents, ...receivedEvents];
-    combined.sort((a, b) => b.ledger - a.ledger);
+    // Dedupe by event ID (same event can match both filters if from=to=address)
+    const uniqueById = new Map();
+    for (const event of events) {
+      if (!uniqueById.has(event.id)) {
+        uniqueById.set(event.id, parseTransferEvent(event, address));
+      }
+    }
 
-    return combined.slice(0, limit);
+    // Sort by ledger descending and limit
+    const transfers = [...uniqueById.values()];
+    transfers.sort((a, b) => b.ledger - a.ledger);
+
+    return transfers.slice(0, limit);
   } catch (error) {
     console.error('Error fetching transfer history:', error);
     throw error;
@@ -421,26 +425,75 @@ function parseFeeEvent(event, address) {
 
 /**
  * Get unified account activity (transfers + fees)
- * Combines SEP-41 transfer events and CAP-67 fee events
- * Uses separate queries to avoid RPC processing limit errors
+ * Combines SEP-41 transfer events and CAP-67 fee events in a single RPC query
  * @param {string} address - Address to fetch activity for
  * @param {number} limit - Maximum events to return (default 200)
  * @returns {Promise<Array>} Array of parsed activity items, sorted by timestamp desc
  */
 export async function getAccountActivity(address, limit = 200) {
   try {
-    // Fetch transfers and fees in parallel with separate queries
-    // This avoids the RPC "processing limit threshold" error from combining 3 filters
-    const [transfers, fees] = await Promise.all([
-      getRecentTransfers(address, limit),
-      getFeeEvents(address, limit),
-    ]);
+    const transferSymbol = StellarSdk.nativeToScVal('transfer', { type: 'symbol' });
+    const feeSymbol = StellarSdk.nativeToScVal('fee', { type: 'symbol' });
+    const targetScVal = StellarSdk.nativeToScVal(StellarSdk.Address.fromString(address), {
+      type: 'address',
+    });
+    const xlmContractId = StellarSdk.Asset.native().contractId(config.networkPassphrase);
 
-    // Merge and sort by ledger (descending)
-    const combined = [...transfers, ...fees];
-    combined.sort((a, b) => b.ledger - a.ledger);
+    const startLedger = await getLatestLedger();
 
-    return combined.slice(0, limit);
+    // Single query with 3 filters: transfers FROM, transfers TO, and fee events
+    // Use 3x limit since we're combining 3 filter types, then dedupe and trim
+    const result = await rpcCall('getEvents', {
+      startLedger: startLedger,
+      filters: [
+        // transfers FROM the address
+        {
+          type: 'contract',
+          topics: [[transferSymbol.toXDR('base64'), targetScVal.toXDR('base64'), '*', '**']],
+        },
+        // transfers TO the address
+        {
+          type: 'contract',
+          topics: [[transferSymbol.toXDR('base64'), '*', targetScVal.toXDR('base64'), '**']],
+        },
+        // fee events for the address (CAP-67)
+        {
+          type: 'contract',
+          contractIds: [xlmContractId],
+          topics: [[feeSymbol.toXDR('base64'), targetScVal.toXDR('base64')]],
+        },
+      ],
+      pagination: { limit: limit * 3, order: 'desc' }
+    });
+
+    const events = result.events || [];
+
+    // Parse each event based on first topic (transfer vs fee), dedupe by event ID
+    const uniqueById = new Map();
+    for (const event of events) {
+      if (uniqueById.has(event.id)) continue;
+
+      // Detect event type from first topic
+      const firstTopic = event.topic?.[0];
+      if (!firstTopic) continue;
+
+      try {
+        const symbol = StellarSdk.scValToNative(StellarSdk.xdr.ScVal.fromXDR(firstTopic, 'base64'));
+        if (symbol === 'transfer') {
+          uniqueById.set(event.id, parseTransferEvent(event, address));
+        } else if (symbol === 'fee') {
+          uniqueById.set(event.id, parseFeeEvent(event, address));
+        }
+      } catch {
+        // Skip events we can't parse
+      }
+    }
+
+    // Sort by ledger descending and limit
+    const activity = [...uniqueById.values()];
+    activity.sort((a, b) => b.ledger - a.ledger);
+
+    return activity.slice(0, limit);
   } catch (error) {
     console.error('Error fetching account activity:', error);
     throw error;
