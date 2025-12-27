@@ -1,13 +1,14 @@
 # Lumenitos Scan
 
-A minimal Stellar token explorer for viewing SEP-41 token balances, transfers, and transaction details on both testnet and mainnet.
+A minimal Stellar token explorer for viewing SEP-41 token balances, token activity, and transaction details on both testnet and mainnet.
 
 ## Overview
 
-Lumenitos Scan is a lightweight block explorer focused on Soroban smart contracts and SEP-41 token activity. It provides:
+Lumenitos Scan is a lightweight block explorer focused on Soroban smart contracts and SEP-41/CAP-67 token activity. It provides:
 
-- **Address exploration** - View token balances and transfer history for any Stellar address (G.../C.../L...)
-- **Token tracking** - See recent transfers for any SEP-41 compliant token
+- **Address exploration** - View token balances and activity history for any Stellar address (G.../C.../L...)
+- **CAP-67 token events** - Track transfers, mints, burns, clawbacks, and fee events
+- **Token tracking** - See recent activity for any SEP-41 compliant token
 - **Transaction details** - Decode and inspect transaction XDRs with human-readable token events, CAP-67 fee breakdowns, and memos
 - **Liquidity pool info** - View pool reserves, fees, and share token activity
 - **Network switching** - Toggle between testnet and mainnet with URL-based state
@@ -54,9 +55,11 @@ lumenitos-scan/
 - Triggers data refetch on network change
 
 **Scan Utilities** (`utils/scan/index.js`)
-- Direct JSON-RPC calls to Soroban RPC (custom droplets)
-- SEP-41 transfer event parsing with `order: desc` support
+- Direct JSON-RPC calls to Soroban RPC via `getEvents` API
+- CAP-67 event parsing for transfer, mint, burn, clawback, and fee events
+- Event validation to filter non-conforming events (e.g., non-standard topic formats)
 - Token metadata caching per-network in localStorage
+- Auto-caching of SAC (Stellar Asset Contract) metadata from event topics
 - XDR decoding via `@stellar/stellar-xdr-json` WASM
 
 **Address Routing**
@@ -69,10 +72,37 @@ lumenitos-scan/
 
 1. User enters address or navigates to URL
 2. NetworkContext provides current network config
-3. Page component calls scan utilities (e.g., `getRecentTransfers`)
+3. Page component calls scan utilities (e.g., `getAccountActivity`)
 4. Utilities make RPC calls to network-specific Soroban RPC
 5. Events parsed from XDR, metadata fetched and cached
 6. UI renders with formatted balances and linked addresses
+
+### CAP-67 Token Events
+
+The explorer uses Stellar's `getEvents` RPC method to query CAP-67 compliant token events:
+
+- **transfer** - `[symbol, from_address, to_address, asset?]`
+- **mint** - `[symbol, admin_address, to_address, asset?]`
+- **burn** - `[symbol, from_address, asset?]`
+- **clawback** - `[symbol, admin_address, from_address, asset?]`
+- **fee** - `[symbol, from_address]` (XLM contract only)
+
+Events are validated to ensure topic positions contain proper address ScVals. Non-conforming events (e.g., tokens with custom event formats) are filtered out.
+
+**RPC Query Strategy:**
+- Account activity uses 2 parallel queries (max 5 filters per request)
+- Token activity queries by contract ID with 4 event type filters
+- Network-wide activity falls back to transfers-only if combined query hits processing limits
+
+### Metadata Caching
+
+Token metadata is cached in localStorage per-network to minimize RPC calls:
+
+- **SEP-41 metadata** - Fetched via `symbol()`, `name()`, `decimals()` contract calls
+- **SAC metadata** - Auto-extracted from event topics (4th topic contains `SYMBOL:ISSUER` or `native`)
+- **Cache key** - `scan_token_metadata_cache_{network}`
+
+SAC (Stellar Asset Contract) tokens always use 7 decimals, so their metadata can be derived directly from transfer events without additional RPC calls.
 
 ## Development
 
@@ -89,7 +119,7 @@ Deployed on Vercel with automatic builds from main branch. Network selection is 
 
 ## Tech Stack
 
-- **Next.js 16 / React 19** - Latest React framework with App Router
+- **Next.js 15 / React 19** - Latest React framework with App Router
 - **Stellar SDK** - Soroban RPC client, XDR parsing
 - **stellar-xdr-json** - WASM-based XDR to JSON decoder
-- **Custom RPC** - Self-hosted Soroban RPC with `order` param support
+- **Soroban RPC** - Uses `getEvents` API with `order: desc` for recent-first results
