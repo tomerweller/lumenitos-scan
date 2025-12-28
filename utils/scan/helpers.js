@@ -165,8 +165,48 @@ export const isAccount = (addr) => {
 };
 
 /**
+ * Parse an asset name string (SYMBOL:ISSUER format)
+ * @param {string} assetName - Asset name like "KALE:GBDVX4..." or "native"
+ * @returns {{symbol: string, issuer: string|null, isAssetName: boolean}}
+ */
+export const parseAssetName = (assetName) => {
+  if (!assetName || typeof assetName !== 'string') {
+    return { symbol: null, issuer: null, isAssetName: false };
+  }
+  if (assetName === 'native') {
+    return { symbol: 'XLM', issuer: null, isAssetName: true };
+  }
+  // Check for SYMBOL:ISSUER format (issuer is a G... address)
+  if (assetName.includes(':')) {
+    const colonIdx = assetName.indexOf(':');
+    const symbol = assetName.substring(0, colonIdx);
+    const issuer = assetName.substring(colonIdx + 1);
+    if (issuer.startsWith('G') && issuer.length === 56) {
+      return { symbol, issuer, isAssetName: true };
+    }
+  }
+  return { symbol: null, issuer: null, isAssetName: false };
+};
+
+/**
+ * Format a large number with thousands separators
+ * @param {number|bigint|string} num - The number to format
+ * @returns {string} Formatted number string
+ */
+export const formatNumber = (num) => {
+  if (num === null || num === undefined) return '';
+  const str = String(num);
+  // Handle negative numbers
+  const isNegative = str.startsWith('-');
+  const absStr = isNegative ? str.slice(1) : str;
+  // Add commas as thousands separators
+  const formatted = absStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return isNegative ? `-${formatted}` : formatted;
+};
+
+/**
  * Format a topic/event value for display
- * Handles addresses, BigInt, and objects
+ * Handles addresses, BigInt, asset names, and objects
  * @param {any} value - The value to format
  * @returns {string} Formatted string
  */
@@ -177,15 +217,23 @@ export const formatTopicValue = (value) => {
     if (value.startsWith('G') || value.startsWith('C') || value.startsWith('L')) {
       return shortenAddressSmall(value);
     }
+    // Check for asset name format (SYMBOL:ISSUER)
+    const { symbol, isAssetName } = parseAssetName(value);
+    if (isAssetName && symbol) {
+      return symbol;
+    }
     return value;
   }
   if (typeof value === 'bigint') {
-    return value.toString();
+    return formatNumber(value);
+  }
+  if (typeof value === 'number') {
+    return formatNumber(value);
   }
   if (typeof value === 'object') {
     // For objects with 'amount' key, just show the amount
     if (value.amount !== undefined) {
-      return value.amount.toString();
+      return formatNumber(value.amount);
     }
     // Use replacer to handle BigInt inside objects
     return JSON.stringify(value, (_, v) => typeof v === 'bigint' ? v.toString() : v);

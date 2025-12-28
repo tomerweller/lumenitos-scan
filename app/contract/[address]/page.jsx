@@ -18,6 +18,8 @@ import {
   formatTopicValue,
   shortenAddressSmall,
   formatErrorMessage,
+  parseAssetName,
+  formatNumber,
 } from '@/utils/scan/helpers';
 import { useNetwork, ScanHeader, AddressDisplay, AddressLink, SkeletonActivity, SkeletonBalance } from '@/app/components';
 import '@/app/scan.css';
@@ -162,11 +164,13 @@ export default function ContractPage({ params }) {
 
   const renderTopicLink = (value) => {
     if (typeof value === 'string') {
+      // Check for address types first
       if (value.startsWith('G') || value.startsWith('C')) {
+        const targetPath = value.startsWith('C') ? `/contract/${value}` : `/account/${value}`;
         return (
           <span
             className="nested-link"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(`/account/${value}`); }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(targetPath); }}
           >{shortenAddressSmall(value)}</span>
         );
       }
@@ -178,6 +182,15 @@ export default function ContractPage({ params }) {
           >{shortenAddressSmall(value)}</span>
         );
       }
+      // Check for asset name format (SYMBOL:ISSUER)
+      const { symbol, isAssetName } = parseAssetName(value);
+      if (isAssetName && symbol) {
+        return <span className="topic-asset">{symbol}</span>;
+      }
+    }
+    // Format numbers and other values
+    if (typeof value === 'bigint' || typeof value === 'number') {
+      return formatNumber(value);
     }
     return formatTopicValue(value);
   };
@@ -371,6 +384,7 @@ export default function ContractPage({ params }) {
                       <div className="event-type">
                         <span className={`event-dot ${inv.inSuccessfulContractCall ? '' : 'danger'}`} />
                         {inv.eventType}
+                        {!inv.inSuccessfulContractCall && <span className="failed-badge">failed</span>}
                       </div>
                       <span className="activity-timestamp" title={new Date(inv.timestamp).toLocaleString()}>
                         {formatRelativeTime(inv.timestamp)}
@@ -378,10 +392,9 @@ export default function ContractPage({ params }) {
                     </div>
 
                     {inv.topics.length > 0 && (
-                      <div className="activity-addresses">
+                      <div className="invocation-topics">
                         {inv.topics.map((topic, i) => (
-                          <span key={i}>
-                            {i > 0 && ', '}
+                          <span key={i} className="invocation-topic">
                             {renderTopicLink(topic)}
                           </span>
                         ))}
@@ -390,16 +403,12 @@ export default function ContractPage({ params }) {
 
                     <div className="activity-footer">
                       {inv.value !== null && (
-                        <span className="text-secondary">= {formatTopicValue(inv.value)}</span>
+                        <span className="invocation-value">{formatTopicValue(inv.value)}</span>
                       )}
                       <span className="activity-tx-link">
                         tx:{inv.txHash?.substring(0, 4)}
                       </span>
                     </div>
-
-                    {!inv.inSuccessfulContractCall && (
-                      <span className="error" style={{ fontSize: '12px' }}>[failed]</span>
-                    )}
                   </Link>
                 ))}
               </div>

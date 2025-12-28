@@ -428,6 +428,50 @@ a.card-item:hover {
   margin: 4px 0;
 }
 
+/* Invocation topics - displayed as inline pills */
+.invocation-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.invocation-topic {
+  font-family: var(--mono-font);
+  font-size: 0.75em;
+  background: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--text-primary);
+}
+
+.invocation-topic .nested-link {
+  text-decoration: none;
+}
+
+.topic-asset {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.invocation-value {
+  font-family: var(--mono-font);
+  font-size: 0.8125em;
+  color: var(--text-secondary);
+}
+
+.failed-badge {
+  font-size: 0.7em;
+  font-weight: 500;
+  color: var(--danger-color);
+  background: rgba(220, 53, 69, 0.1);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  text-transform: lowercase;
+}
+
 /* Nested links inside clickable cards - styled as links but rendered as spans */
 .nested-link {
   color: var(--primary-color);
