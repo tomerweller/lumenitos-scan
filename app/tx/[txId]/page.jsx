@@ -293,8 +293,7 @@ export default function TransactionPage({ params }) {
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
       ...prev,
-      // Treat undefined as expanded (true), so first click collapses
-      [section]: prev[section] === false
+      [section]: !prev[section]
     }));
   };
 
