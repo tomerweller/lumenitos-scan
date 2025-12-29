@@ -159,11 +159,12 @@ export default function ScanPage() {
   };
 
   // Get event type display info
-  const getEventTypeInfo = (type) => {
+  const getEventTypeInfo = (type, isRefund) => {
     switch (type) {
       case 'mint': return { label: 'Mint', dotClass: 'success' };
       case 'burn': return { label: 'Burn', dotClass: 'danger' };
       case 'clawback': return { label: 'Clawback', dotClass: 'danger' };
+      case 'fee': return { label: isRefund ? 'Fee Refund' : 'Fee', dotClass: isRefund ? 'success' : '' };
       default: return { label: 'Transfer', dotClass: '' };
     }
   };
@@ -204,7 +205,7 @@ export default function ScanPage() {
       </form>
 
       <div className="section-title">
-        Recent Network Activity
+        Recent Token Activity
         <a
           href="#"
           className="refresh-btn"
@@ -230,7 +231,7 @@ export default function ScanPage() {
                 <Link href={`/tx/${group.txHash}`} key={group.txHash} className="card-item">
                   {group.events.map((item, eventIndex) => {
                     const formatted = formatTransfer(item);
-                    const typeInfo = getEventTypeInfo(item.type);
+                    const typeInfo = getEventTypeInfo(item.type, item.isRefund);
 
                     return (
                       <div key={eventIndex} style={{ marginBottom: eventIndex < group.events.length - 1 ? '12px' : '0' }}>
@@ -249,7 +250,7 @@ export default function ScanPage() {
                         <div className="activity-addresses">
                           {item.type === 'mint' ? (
                             <>→ <AddressLink address={item.to} nested /></>
-                          ) : item.type === 'burn' ? (
+                          ) : item.type === 'burn' || item.type === 'fee' ? (
                             <AddressLink address={item.from} nested />
                           ) : (
                             <>
@@ -261,10 +262,12 @@ export default function ScanPage() {
                         </div>
 
                         <div className="activity-footer">
-                          <span className={`activity-amount ${item.type === 'mint' ? 'positive' : item.type === 'clawback' ? 'negative' : ''}`}>
-                            {item.type === 'mint' && '+'}
-                            {item.type === 'burn' && '-'}
-                            {item.type === 'clawback' && '-'}
+                          <span className={`activity-amount ${
+                            item.type === 'mint' || item.isRefund ? 'positive' :
+                            item.type === 'clawback' || (item.type === 'fee' && !item.isRefund) ? 'negative' : ''
+                          }`}>
+                            {(item.type === 'mint' || item.isRefund) && '+'}
+                            {(item.type === 'burn' || item.type === 'clawback' || (item.type === 'fee' && !item.isRefund)) && '-'}
                             {formatted.formattedAmount}{' '}
                             <span
                               className="nested-link"

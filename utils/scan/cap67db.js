@@ -216,7 +216,7 @@ export async function getAddressActivityWithFees(address, limit = 200) {
 }
 
 /**
- * Fetch and adapt network-wide token activity (excludes fees)
+ * Fetch and adapt network-wide token activity (includes all event types)
  * @param {number} limit - Maximum events to return
  * @returns {Promise<Array>} Array of adapted events
  */
@@ -226,9 +226,9 @@ export async function getNetworkActivity(limit = 200) {
     order: 'desc',
   });
 
-  // Filter out fee and set_authorized events client-side
+  // Filter out only set_authorized events
   return (result.events || [])
-    .filter(e => !NON_TOKEN_TYPES.includes(e.type))
+    .filter(e => e.type !== 'set_authorized')
     .map(e => adaptEvent(e));
 }
 
