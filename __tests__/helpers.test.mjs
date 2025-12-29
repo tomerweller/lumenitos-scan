@@ -150,7 +150,7 @@ describe('formatTopicValue', () => {
   });
 
   it('should convert BigInt to string', () => {
-    expect(formatTopicValue(BigInt(12345))).toBe('12345');
+    expect(formatTopicValue(BigInt(12345))).toBe('12,345');
   });
 
   it('should handle regular strings', () => {
