@@ -238,6 +238,17 @@ export default function TransactionPage({ params }) {
       eventType: getEventType(event),
     }));
 
+    // Sort events by stage: before_all_txs first, operation events in middle, after_all_txs last
+    tokenEvents.sort((a, b) => {
+      const getStageOrder = (event) => {
+        if (event.stage === 'before_all_txs') return 0;
+        if (event.stage === 'after_all_txs') return 2;
+        // Operation events (no stage) go in the middle
+        return 1;
+      };
+      return getStageOrder(a) - getStageOrder(b);
+    });
+
     setDecodedXdrs(decoded);
     setEvents(tokenEvents);
 
